@@ -209,8 +209,8 @@ function renderMain() {
       ...pathRow('p.output', 'outputDir', { browse: 'folder', open: true }),
       ...pathRow('p.placeholder', 'placeholderPath', { browse: 'image', clear: true, hint: t('p.placeholderHint') }),
       h('span', {}), h('div', { class: 'phprev' }, h('span', { class: 'hint', text: t('p.phPreview') }), h('img', { id: 'phThumb', alt: '', width: 240, height: 135, hidden: true }))),
-    h('div', { class: 'tabs', role: 'tablist' }, ...['feeds', 'format', 'log'].map((k) => h('button', { class: 'tab' + (state.tab === k ? ' sel' : ''), role: 'tab', text: t('tab.' + k), onclick: () => { state.tab = k; renderMain(); } }))),
-    state.tab === 'feeds' ? feedsTab(p, change) : state.tab === 'format' ? formatTab(p, change) : logTab()
+    h('div', { class: 'tabs', role: 'tablist' }, ...['feeds', 'options', 'format', 'log'].map((k) => h('button', { class: 'tab' + (state.tab === k ? ' sel' : ''), role: 'tab', text: t('tab.' + k), onclick: () => { state.tab = k; renderMain(); } }))),
+    state.tab === 'feeds' ? feedsTab(p, change) : state.tab === 'options' ? optionsTab(p, change) : state.tab === 'format' ? formatTab(p, change) : logTab()
   );
   refreshDynamic();
   loadPlaceholderPreview(p);
@@ -225,20 +225,26 @@ async function loadPlaceholderPreview(p) {
 
 // ---- feeds tab ----------------------------------------------------------------------------------
 function feedsTab(p, change) {
-  const rows = p.feeds.map((f) =>
-    h('tr', {},
+  const nameOf = (id) => p.feeds.find((x) => x.id === id)?.folder || '?';
+  const rows = p.feeds.map((f) => {
+    const merge = f.type === 'merge';
+    return h('tr', {},
       h('td', {}, h('input', { type: 'checkbox', checked: f.enabled, 'aria-label': t('f.on'), onchange: (e) => { f.enabled = e.target.checked; change(); } })),
       h('td', {}, h('input', { type: 'text', value: f.folder, maxLength: 100, 'aria-label': t('f.folder'), onchange: (e) => { f.folder = e.target.value; change(); } })),
-      h('td', { class: 'url' }, h('input', { type: 'url', value: f.url, spellcheck: false, placeholder: 'https://…', 'aria-label': t('f.url'), onchange: (e) => { f.url = e.target.value.trim(); change(); } })),
+      h('td', { class: 'url' }, merge
+        ? h('span', { class: 'hint', text: f.sources.length ? t('f.mergeOf', { names: f.sources.map(nameOf).join(', ') }) : t('f.mergeNone') })
+        : h('input', { type: 'url', value: f.url, spellcheck: false, placeholder: 'https://…', 'aria-label': t('f.url'), onchange: (e) => { f.url = e.target.value.trim(); change(); } })),
       h('td', {}, h('input', { type: 'number', min: 1, max: 100, value: f.maxItems, 'aria-label': t('f.max'), onchange: (e) => { f.maxItems = Number(e.target.value); change(); } })),
-      h('td', {}, h('input', { type: 'number', min: 0, max: 1440, value: f.intervalMin || '', placeholder: String(p.intervalMin), title: t('f.everyHint'), 'aria-label': t('f.every'), onchange: (e) => { f.intervalMin = Number(e.target.value) || 0; change(); } })),
-      h('td', {}, h('input', { type: 'checkbox', checked: f.insecureTls, 'aria-label': t('f.tls'), title: t('f.tlsHint'), onchange: (e) => { f.insecureTls = e.target.checked; change(); } })),
+      h('td', {}, merge ? null : h('input', { type: 'number', min: 0, max: 1440, value: f.intervalMin || '', placeholder: String(p.intervalMin), title: t('f.everyHint'), 'aria-label': t('f.every'), onchange: (e) => { f.intervalMin = Number(e.target.value) || 0; change(); } })),
+      h('td', {}, merge ? null : h('input', { type: 'checkbox', checked: f.insecureTls, 'aria-label': t('f.tls'), title: t('f.tlsHint'), onchange: (e) => { f.insecureTls = e.target.checked; change(); } })),
       h('td', { class: 'st', 'data-feed': f.id }),
       h('td', {}, h('div', { class: 'row-actions' },
-        h('button', { class: 'btn small', text: t('f.test'), onclick: () => testFeed(f) }),
-        h('button', { class: 'btn small', text: '×', title: t('f.remove'), 'aria-label': t('f.remove'), onclick: () => { p.feeds = p.feeds.filter((x) => x.id !== f.id); change(); renderMain(); } })))
-    )
-  );
+        h('button', { class: 'btn small', text: t('f.options'), onclick: () => openFeedDialog(p, f, change) }),
+        h('button', { class: 'btn small', text: t('f.test'), onclick: () => testFeed(f, p) }),
+        h('button', { class: 'btn small', text: '×', title: t('f.remove'), 'aria-label': t('f.remove'), onclick: () => { p.feeds = p.feeds.filter((x) => x.id !== f.id); for (const m of p.feeds) m.sources = (m.sources || []).filter((sid) => sid !== f.id); change(); renderMain(); } })))
+    );
+  });
+  const addFeed = (type) => { p.feeds.push({ id: crypto.randomUUID(), type, folder: type === 'merge' ? 'Latest' : `Feed${p.feeds.length + 1}`, url: '', sources: type === 'merge' ? p.feeds.filter((x) => x.type === 'feed').map((x) => x.id) : [], maxItems: type === 'merge' ? 15 : 10, intervalMin: 0, staleHours: 0, filters: { include: [], exclude: [], scope: 'both', sort: 'feed', dedupe: false }, enabled: true, insecureTls: false }); change(); renderMain(); };
   return h('div', {},
     p.feeds.length
       ? h('table', { class: 'feeds' },
@@ -246,29 +252,86 @@ function feedsTab(p, change) {
           h('tbody', {}, rows))
       : h('p', { class: 'hint', text: t('f.none') }),
     h('div', { class: 'toolbar' },
-      h('button', { class: 'btn', text: t('f.add'), onclick: () => { p.feeds.push({ id: crypto.randomUUID(), folder: `Feed${p.feeds.length + 1}`, url: '', maxItems: 10, intervalMin: 0, enabled: true, insecureTls: false }); change(); renderMain(); } })),
+      h('button', { class: 'btn', text: t('f.add'), onclick: () => addFeed('feed') }),
+      h('button', { class: 'btn', text: t('f.addMerge'), onclick: () => addFeed('merge') })),
     h('p', { class: 'hint', text: t('f.duplicate') }),
     h('div', { class: 'alert-line warn-line', text: t('f.legal') })
   );
 }
 
-async function testFeed(f) {
+// ---- feed options (filters, order, merge sources, alert) ----------------------------------------------
+const splitWords = (v) => v.split(/[\n,;]+/).map((x) => x.trim()).filter(Boolean);
+
+function openFeedDialog(p, f, change) {
+  $('#feedTitle').textContent = `${t('fo.title')} — ${f.folder}`;
+  const fl = f.filters;
+  const merge = f.type === 'merge';
+  const words = (key) => h('textarea', { rows: 3, spellcheck: false, value: fl[key].join('\n'), onchange: (e) => { fl[key] = splitWords(e.target.value); change(); } });
+  const sel = (get, set, opts) => h('select', { onchange: (e) => { set(e.target.value); change(); } }, opts.map(([v, k]) => h('option', { value: v, selected: get() === v, text: t(k) })));
+  const rowsDom = [];
+  if (merge) {
+    rowsDom.push(h('div', { class: 'sec' }, h('h3', { text: t('fo.sources') }), h('p', { class: 'hint', text: t('fo.sourcesHint') }),
+      ...p.feeds.filter((x) => x.type === 'feed').map((x) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: f.sources.includes(x.id), onchange: (e) => { f.sources = e.target.checked ? [...f.sources, x.id] : f.sources.filter((sid) => sid !== x.id); change(); } }), h('span', { text: x.folder })))));
+  }
+  rowsDom.push(h('div', { class: 'sec' }, h('h3', { text: t('fo.filters') }), h('p', { class: 'hint', text: t('fo.words') }),
+    h('div', { class: 'form' },
+      h('label', { text: t('fo.include') }), words('include'),
+      h('label', { text: t('fo.exclude') }), words('exclude'),
+      h('label', { text: t('fo.scope') }), sel(() => fl.scope, (v) => { fl.scope = v; }, [['both', 'fo.scopeBoth'], ['title', 'fo.scopeTitle']]),
+      merge ? null : h('label', { text: t('fo.sort') }), merge ? null : sel(() => fl.sort, (v) => { fl.sort = v; }, [['feed', 'fo.sortFeed'], ['newest', 'fo.sortNewest']]),
+      merge ? null : h('span', {}), merge ? null : h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: fl.dedupe, onchange: (e) => { fl.dedupe = e.target.checked; change(); } }), h('span', { text: t('fo.dedupe') })))));
+  rowsDom.push(h('div', { class: 'sec' }, h('h3', { text: t('o.checks') }),
+    h('div', { class: 'check' }, h('span', { text: t('fo.stale') }), h('input', { type: 'number', min: 0, max: 720, value: f.staleHours || '', placeholder: String(p.staleHours), onchange: (e) => { f.staleHours = Number(e.target.value) || 0; change(); } }), h('span', { class: 'hint', text: t('fo.staleHint') }))));
+  $('#feedBody').replaceChildren(...rowsDom);
+  const dlg = $('#dlgFeed');
+  dlg.onclose = () => { dlg.onclose = null; renderMain(); };
+  dlg.showModal();
+}
+
+// ---- preview ("as it would be written") ---------------------------------------------------------------
+async function testFeed(f, p, raw = false) {
   const body = $('#testBody');
   body.replaceChildren(h('p', { text: t('test.loading') }));
   $('#dlgTest').showModal();
-  const r = await api.feed.test({ url: f.url, insecureTls: f.insecureTls }, state.sel);
+  const r = await api.feed.test(f, p.id, raw);
   if (!r.ok) return body.replaceChildren(h('p', { class: 'badge bad', text: t('test.failed', { e: r.error }) }));
   body.replaceChildren(
-    h('p', { class: 'hint', text: t('test.total', { n: r.total, m: r.items.length }) }),
+    f.type === 'merge' ? null : h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: raw, onchange: (e) => testFeed(f, p, e.target.checked) }), h('span', { text: t('test.raw') })),
+    h('p', { class: 'hint', text: raw ? t('test.rawSummary', { total: r.total, m: r.items.length }) : t('test.summary', { sel: r.selected, total: r.total, removed: r.removed }) }),
     h('div', { class: 'tgrid' }, r.items.map((it) =>
       h('div', { class: 'tcard' },
         h('div', { class: 'thumb' }, it.thumb ? h('img', { src: it.thumb, alt: '' }) : t('test.noImage')),
-        h('div', { class: 'tb' }, h('div', { class: 'tt', text: it.title || '—' }), h('div', { class: 'td', text: it.description || '—' }), it.hasImage ? null : h('span', { class: 'badge', text: it.imageFailed ? t('test.imgFailed') : t('test.noImage') })))))
+        h('div', { class: 'tb' },
+          h('div', { class: 'tfile', text: `${it.n}  ·  ${it.imageFile}` }),
+          h('div', { class: 'tt', text: it.titleLine }), h('div', { class: 'td', text: it.descLine }),
+          it.date ? h('div', { class: 'tdate', text: fmtDateTime(it.date) }) : null,
+          it.hasImage ? null : h('span', { class: 'badge', text: it.imageFailed ? t('test.imgFailed') : t('test.noImage') })))))
   );
 }
 
+// ---- schedule & options tab ---------------------------------------------------------------------------
+function optionsTab(p, change) {
+  const sch = p.schedule;
+  const timeInput = (w, key) => h('input', { type: 'text', value: w[key], maxLength: 5, size: 5, placeholder: 'HH:MM', 'aria-label': t(key === 'from' ? 'o.from' : 'o.to'), onchange: (e) => { w[key] = e.target.value.trim(); change(); } });
+  const windowRow = (w, i) => h('div', { class: 'wrow' },
+    h('div', { class: 'days' }, [1, 2, 3, 4, 5, 6, 0].map((d) => h('label', { class: 'day' }, h('input', { type: 'checkbox', checked: w.days.includes(d), onchange: (e) => { w.days = e.target.checked ? [...w.days, d] : w.days.filter((x) => x !== d); change(); } }), h('span', { text: t('o.d' + d) })))),
+    h('span', { text: t('o.from') }), timeInput(w, 'from'), h('span', { text: t('o.to') }), timeInput(w, 'to'),
+    h('span', { text: t('o.every') }), h('input', { type: 'number', min: 0, max: 1440, value: w.intervalMin || '', placeholder: String(p.intervalMin), onchange: (e) => { w.intervalMin = Number(e.target.value) || 0; change(); } }),
+    h('button', { class: 'btn small', text: '×', title: t('o.remove'), 'aria-label': t('o.remove'), onclick: () => { sch.windows.splice(i, 1); change(); renderMain(); } }));
+  return h('div', { class: 'opts' },
+    h('div', { class: 'sec' }, h('h3', { text: t('o.windows') }),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: sch.enabled, onchange: (e) => { sch.enabled = e.target.checked; if (sch.enabled && !sch.windows.length) sch.windows.push({ days: [0, 1, 2, 3, 4, 5, 6], from: '06:00', to: '24:00', intervalMin: 0 }); change(); renderMain(); } }), h('span', { text: t('o.windowsOn') })),
+      h('p', { class: 'hint', text: t('o.windowsHint') }),
+      sch.enabled ? [...sch.windows.map(windowRow), sch.windows.length ? null : h('p', { class: 'hint', text: t('o.noWindows') }), h('button', { class: 'btn small', text: t('o.addWindow'), onclick: () => { sch.windows.push({ days: [0, 1, 2, 3, 4, 5, 6], from: '06:00', to: '24:00', intervalMin: 0 }); change(); renderMain(); } })] : null),
+    h('div', { class: 'sec' }, h('h3', { text: t('o.checks') }),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: p.verifyOutput, onchange: (e) => { p.verifyOutput = e.target.checked; change(); } }), h('span', { text: t('o.verify') })),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: p.dedupeAcrossFeeds, onchange: (e) => { p.dedupeAcrossFeeds = e.target.checked; change(); } }), h('span', { text: t('o.dedupeAcross') })),
+      h('div', { class: 'check' }, h('span', { text: t('o.stale') }), h('input', { type: 'number', min: 0, max: 720, value: p.staleHours, onchange: (e) => { p.staleHours = Number(e.target.value) || 0; change(); } }), h('span', { text: t('o.hours') })),
+      h('p', { class: 'hint', text: t('o.staleHint') })));
+}
+
 // ---- format tab ---------------------------------------------------------------------------------
-const FORMAT_DEFAULTS = { encoding: 'utf8', lineEnding: 'lf', trailingNewline: false, emptyValue: '-', maxTitleChars: 0, maxDescChars: 0, titleFile: '{folder}_Title.Txt', descFile: '{folder}_Description.Txt', imageDir: '{folder}', imageStart: 1, imagePad: 5, imageExt: 'JPG', jpegQuality: 85, resize: 'none', width: 0, height: 0, metadataFile: true };
+const FORMAT_DEFAULTS = { encoding: 'utf8', lineEnding: 'lf', trailingNewline: false, emptyValue: '-', maxTitleChars: 0, maxDescChars: 0, titleFile: '{folder}_Title.Txt', descFile: '{folder}_Description.Txt', imageDir: '{folder}', imageStart: 1, imagePad: 5, imageExt: 'JPG', jpegQuality: 85, modernImages: true, resize: 'none', width: 0, height: 0, metadataFile: true };
 
 function formatTab(p, change) {
   const f = p.format;
@@ -300,7 +363,8 @@ function formatTab(p, change) {
       h('label', { text: t('fmt.quality') }), num('jpegQuality', 30, 100),
       h('label', { text: t('fmt.resize') }), h('div', { class: 'inline' }, sel('resize', [['none', 'fmt.rNone'], ['cover', 'fmt.rCover'], ['contain', 'fmt.rContain']]),
         f.resize !== 'none' ? [h('span', { text: t('fmt.width') }), num('width', 0, 8000), h('span', { text: t('fmt.height') }), num('height', 0, 8000)] : null),
-      h('span', {}), chk('metadataFile', 'fmt.meta')),
+      h('span', {}), chk('metadataFile', 'fmt.meta'),
+      h('span', {}), chk('modernImages', 'fmt.modern')),
     h('div', { class: 'hint', text: t('fmt.preview') }), tree,
     h('div', { class: 'toolbar' }, h('button', { class: 'btn', text: t('fmt.reset'), onclick: () => { p.format = { ...FORMAT_DEFAULTS }; change(); renderMain(); } }))
   );
@@ -329,11 +393,14 @@ function logTab() {
 }
 
 // ---- live status (feed cells, countdown) -----------------------------------------------------------
-function feedStatusNodes(r, feed) {
-  if (!r) return [h('span', { class: 'time', text: feed && !feed.url ? t('f.noUrl') : t('f.never') })];
+const staleOf = (p, f, r) => { const hrs = (f && f.staleHours) || (p && p.staleHours) || 0; return hrs && r?.ok && r.changedAt && Date.now() - r.changedAt > hrs * 3_600_000 ? Math.floor((Date.now() - r.changedAt) / 3_600_000) : 0; };
+
+function feedStatusNodes(r, feed, p) {
+  if (!r) return [h('span', { class: 'time', text: feed && feed.type !== 'merge' && !feed.url ? t('f.noUrl') : t('f.never') })];
   if (!r.ok) return [h('span', { class: 'led bad' }), ' ', h('span', { class: 'bad-text', text: r.error }), ' ', h('span', { class: 'time', text: fmtDateTime(r.at) })];
-  const text = r.unchanged ? t('f.unchanged', { items: r.items }) : t('f.stat', { items: r.items, img: r.imagesOriginal, ph: r.placeholders });
-  return [h('span', { class: 'led ok' }), ' ', text, ' ', h('span', { class: 'time', text: fmtDateTime(r.at) })];
+  const text = (r.unchanged ? t('f.unchanged', { items: r.items }) : t('f.stat', { items: r.items, img: r.imagesOriginal, ph: r.placeholders })) + (r.filteredOut ? ` · ${t('f.leftOut', { n: r.filteredOut })}` : '');
+  const quiet = staleOf(p, feed, r);
+  return [h('span', { class: 'led ' + (quiet ? 'warn' : 'ok') }), ' ', text, ' ', h('span', { class: 'time', text: fmtDateTime(r.at) }), ...(quiet ? [h('div', {}, h('span', { class: 'badge bad', text: t('f.staleBadge', { h: quiet }) }))] : [])];
 }
 
 function refreshDynamic() {
@@ -344,7 +411,7 @@ function refreshDynamic() {
   const st = state.status.profiles[p.id] || {};
   for (const td of document.querySelectorAll('td.st')) {
     const id = td.getAttribute('data-feed');
-    td.replaceChildren(...feedStatusNodes(st.feeds?.[id], p.feeds.find((f) => f.id === id)));
+    td.replaceChildren(...feedStatusNodes(st.feeds?.[id], p.feeds.find((f) => f.id === id), p));
   }
   tickCountdown();
   const run = $('#btnRun');
@@ -425,7 +492,7 @@ function renderDashboard() {
       const r = st.feeds?.[f.id];
       return h('tr', {},
         h('td', {}, h('span', { class: 'led ' + (!r ? '' : r.ok ? 'ok' : 'bad') }), ' ', f.folder),
-        h('td', { class: 'st' }, ...(r ? (r.ok ? [r.unchanged ? t('f.unchanged', { items: r.items }) : t('f.stat', { items: r.items, img: r.imagesOriginal, ph: r.placeholders })] : [h('span', { class: 'bad-text', text: r.error })]) : [h('span', { class: 'time', text: t('dash.pending') })])),
+        h('td', { class: 'st' }, ...(r ? (r.ok ? [(r.unchanged ? t('f.unchanged', { items: r.items }) : t('f.stat', { items: r.items, img: r.imagesOriginal, ph: r.placeholders })) + (r.filteredOut ? ` · ${t('f.leftOut', { n: r.filteredOut })}` : ''), staleOf(p, f, r) ? h('span', { class: 'badge bad', text: t('f.staleBadge', { h: staleOf(p, f, r) }) }) : null] : [h('span', { class: 'bad-text', text: r.error })]) : [h('span', { class: 'time', text: t('dash.pending') })])),
         h('td', { class: 'time', text: r ? fmtDateTime(r.at) : '—' }),
         h('td', { class: 'time', text: r?.changedAt ? fmtDateTime(r.changedAt) : '—' }));
     });
@@ -507,6 +574,7 @@ function renderSettings() {
   const n = s.notifications;
   const tg = n.telegram;
   const em = n.email;
+  const dg = n.digest;
   const gen = (key, label) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: g[key], onchange: async (e) => { await patchSettings({ general: { [key]: e.target.checked } }); } }), h('span', { text: t(label) }));
   const msgBox = h('div', { class: 'hint', id: 'setMsg' });
   const tokenInput = h('input', { type: 'password', value: tg.botToken, autocomplete: 'off', spellcheck: false, onchange: (e) => patchSettings({ notifications: { telegram: { botToken: e.target.value } } }) });
@@ -524,9 +592,18 @@ function renderSettings() {
     emailTo.value = next.notifications.email.recipients.join('\n'); // show what was kept
     if (next.notifications.email.recipients.length < new Set(typed.map((x) => x.toLowerCase())).size) msgBox.textContent = t('s.emailDropped');
   };
+  const cmdApp = h('pre', { class: 'cmd' });
+  const cmdNode = h('pre', { class: 'cmd' });
+  const copyText = async (text, box) => { try { await navigator.clipboard.writeText(text); box.textContent = t('s.headlessCopied'); } catch { box.textContent = text; } };
+  api.cliInfo().then((info) => {
+    const q = (x) => `"${x}"`;
+    const tail = `--settings ${q('<exported-settings.json>')} --data ${q(info.dataDir)}`;
+    cmdApp.textContent = info.platform === 'win32' ? `set ELECTRON_RUN_AS_NODE=1\n${q(info.exe)} ${q(info.script)} ${tail}` : `ELECTRON_RUN_AS_NODE=1 ${q(info.exe)} ${q(info.script)} ${tail}`;
+    cmdNode.textContent = `node src/cli.js --settings <exported-settings.json> --data ./tfb-data`;
+  });
   $('#settingsBody').replaceChildren(
     h('div', { class: 'sec' }, h('h3', { text: t('s.general') }),
-      gen('startOnBoot', 's.startOnBoot'), gen('startMinimized', 's.startMinimized'), gen('runOnLaunch', 's.runOnLaunch'), gen('keepAwake', 's.keepAwake'),
+      gen('startOnBoot', 's.startOnBoot'), gen('startMinimized', 's.startMinimized'), gen('runOnLaunch', 's.runOnLaunch'), gen('keepAwake', 's.keepAwake'), gen('rememberState', 's.remember'),
       h('div', { class: 'check' }, h('span', { text: t('s.logDays') }), h('input', { type: 'number', min: 1, max: 365, value: g.logRetentionDays, onchange: (e) => patchSettings({ general: { logRetentionDays: Number(e.target.value) } }) }), h('span', { text: t('s.days') }))),
     h('div', { class: 'sec' }, h('h3', { text: t('s.alerts') }),
       h('p', { class: 'hint', text: t('s.alertsHint') }),
@@ -547,12 +624,22 @@ function renderSettings() {
         h('label', { text: t('s.emailFrom') }), emailText('from', 'alerts@example.com'),
         h('label', { text: t('s.emailTo') }), emailTo),
       h('p', { class: 'hint', text: t('s.emailNote') }),
-      h('button', { class: 'btn', text: t('s.emailTest'), onclick: async () => { await saveEmailRecipients(); const c = state.settings.notifications.email; const r = await api.email.test({ ...c, pass: emailPass.value }); msgBox.textContent = r.ok ? t('s.emailOk') : r.error; } })),
+      h('button', { class: 'btn', text: t('s.emailTest'), onclick: async () => { await saveEmailRecipients(); const c = state.settings.notifications.email; const r = await api.email.test({ ...c, pass: emailPass.value }); msgBox.textContent = r.ok ? t('s.emailOk') : r.error; } }),
+      h('hr', {}),
+      h('h4', { text: t('s.digest') }),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: dg.enabled, onchange: (e) => patchSettings({ notifications: { digest: { enabled: e.target.checked } } }) }), h('span', { text: t('s.digestOn') })),
+      h('div', { class: 'check' }, h('span', { text: t('s.digestTimes') }), h('input', { type: 'text', value: dg.times.join(', '), size: 22, onchange: async (e) => { const next = await patchSettings({ notifications: { digest: { times: e.target.value.split(/[\s,;]+/).filter(Boolean) } } }); e.target.value = next.notifications.digest.times.join(', '); } })),
+      h('button', { class: 'btn', text: t('s.digestNow'), onclick: async () => { const nn = state.settings.notifications; if (!nn.telegram.enabled && !nn.email.enabled) { msgBox.textContent = t('s.digestNone'); return; } await api.digest.send(); msgBox.textContent = t('s.digestSent'); } })),
     h('div', { class: 'sec' }, h('h3', { text: t('s.backup') }),
       h('div', { class: 'toolbar' },
         h('button', { class: 'btn', text: t('s.export'), onclick: async () => { const r = await api.settings.export(); if (r.ok) msgBox.textContent = t('s.exported', { f: r.file }); } }),
         h('button', { class: 'btn', text: t('s.import'), onclick: async () => { const r = await api.settings.import(); if (r.ok) { state.settings = r.settings; state.sel = state.settings.profiles[0]?.id || null; state.view = 'dash'; applyLang(); msgBox.textContent = t('s.importOk'); } else if (r.error) msgBox.textContent = r.error; } })),
       h('p', { class: 'hint', text: t('s.backupNote') })),
+    h('div', { class: 'sec' }, h('h3', { text: t('s.headless') }),
+      h('p', { class: 'hint', text: t('s.headlessText') }),
+      h('div', { class: 'hint', text: t('s.headlessApp') }), cmdApp, h('button', { class: 'btn small', text: t('s.headlessCopy'), onclick: () => copyText(cmdApp.textContent, msgBox) }),
+      h('div', { class: 'hint', text: t('s.headlessNode') }), cmdNode, h('button', { class: 'btn small', text: t('s.headlessCopy'), onclick: () => copyText(cmdNode.textContent, msgBox) }),
+      h('p', { class: 'hint', text: t('s.headlessEnv') })),
     h('div', { class: 'sec' }, h('h3', { text: t('s.updates') }),
       gen('checkUpdates', 's.checkUpdates'),
       h('button', { class: 'btn', text: t('s.checkNow'), onclick: async () => { const r = await checkUpdate(true); msgBox.textContent = !r.ok ? t('s.updateErr', { e: r.error }) : r.noRelease ? t('s.noRelease') : r.available ? t('update.available', { v: r.latest, c: r.current }) : t('s.upToDate'); } })),

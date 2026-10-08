@@ -80,10 +80,10 @@ export function createAlerter({ getSettings, notifyDesktop = () => {}, log = () 
     attempt(0);
   }
 
-  function send(text) {
+  function send(text, { desktop = true, subject: given } = {}) {
     const s = getSettings();
-    if (s.notifications.desktop) notifyDesktop(text);
-    const subject = `${PREFIX} ${text.split(/[.:]/)[0].slice(0, 90)}`;
+    if (desktop && s.notifications.desktop) notifyDesktop(text);
+    const subject = given || `${PREFIX} ${text.split(/[.:]/)[0].slice(0, 90)}`;
     if (s.notifications.telegram?.enabled) withRetry('Telegram', () => tg(getSettings().notifications.telegram, text, getSettings().language));
     if (s.notifications.email?.enabled) withRetry('email', () => mail(getSettings().notifications.email, subject, text, getSettings().language));
   }
@@ -96,7 +96,7 @@ export function createAlerter({ getSettings, notifyDesktop = () => {}, log = () 
       return;
     }
     s.fails++;
-    const threshold = key.startsWith('dir:') ? 1 : getSettings().notifications.failThreshold; // a missing folder is never transient noise
+    const threshold = /^(dir|stale):/.test(key) ? 1 : getSettings().notifications.failThreshold; // a missing folder or a feed that went quiet is never transient noise
     if (!s.alerted && s.fails >= threshold) {
       s.alerted = true;
       send(downText(s.fails));
@@ -106,7 +106,12 @@ export function createAlerter({ getSettings, notifyDesktop = () => {}, log = () 
 
   return {
     check,
+    // a message on the enabled channels without desktop notification (the daily summary)
+    broadcast: (text, subject) => send(text, { desktop: false, subject }),
     forget(prefix) { for (const k of state.keys()) if (k.startsWith(prefix)) state.delete(k); },
-    reset: () => state.clear()
+    reset: () => state.clear(),
+    // so that an alert already sent is not sent again after a restart
+    exportState: () => Object.fromEntries([...state].filter(([, v]) => v.alerted)),
+    importState(obj) { for (const [k, v] of Object.entries(obj || {})) if (v && v.alerted) state.set(k, { fails: Number(v.fails) || 1, alerted: true }); }
   };
 }

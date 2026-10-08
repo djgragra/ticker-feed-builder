@@ -123,14 +123,41 @@ try {
   await sleep(200);
   await ev(`document.querySelectorAll('.profile-item')[0].click()`);
   await sleep(200);
-  await ev(`document.querySelectorAll('.tab')[1].click()`);
+  await ev(`document.querySelectorAll('.tab')[1].click()`); // schedule & options
+  await sleep(200);
+  assert.match(await ev(`document.querySelector('#main').textContent`), /Time windows/);
+  await ev(`document.querySelector('.opts input[type=checkbox]').click()`); // switch the time windows on
+  await sleep(500);
+  await shot('03a-options');
+  assert.equal(await ev(`api.settings.get().then(s => s.profiles[0].schedule.enabled)`), true);
+  await ev(`document.querySelector('.opts input[type=checkbox]').click()`); // and off again
+  await sleep(400);
+  await ev(`document.querySelectorAll('.tab')[2].click()`); // output format
   await sleep(200);
   await shot('03-format');
-  await ev(`document.querySelectorAll('.tab')[2].click()`);
+  await ev(`document.querySelectorAll('.tab')[3].click()`);
   await sleep(200);
   await shot('04-log');
-  await ev(`document.querySelectorAll('.tab')[0].click(); document.querySelector('td.st').parentElement.querySelector('.btn.small').click()`);
+  await ev(`document.querySelectorAll('.tab')[0].click()`);
+  await sleep(200);
+  // feed options: exclude a word, check it is saved and used by the preview
+  await ev(`document.querySelectorAll('td.st')[0].parentElement.querySelectorAll('.btn.small')[0].click()`);
+  await sleep(300);
+  await shot('04b-feed-options');
+  await ev(`(() => { const ta = document.querySelectorAll('#feedBody textarea')[1]; ta.value = 'seconda'; ta.dispatchEvent(new Event('change')); })()`);
+  await sleep(600);
+  assert.deepEqual(await ev(`api.settings.get().then(s => s.profiles[0].feeds[0].filters.exclude)`), ['seconda']);
+  await ev(`document.querySelector('#dlgFeed').close()`);
+  await sleep(300);
+  // add a merged feed
+  await ev(`[...document.querySelectorAll('.toolbar .btn')].find(b => /merged|unito|combinado/i.test(b.textContent)).click()`);
+  await sleep(600);
+  assert.equal(await ev(`api.settings.get().then(s => s.profiles[0].feeds.length)`), 2);
+  assert.equal(await ev(`api.settings.get().then(s => s.profiles[0].feeds[1].type)`), 'merge');
+  await shot('04c-merged-feed');
+  await ev(`document.querySelectorAll('td.st')[0].parentElement.querySelectorAll('.btn.small')[1].click()`);
   await sleep(1500);
+  assert.match(await ev(`document.querySelector('#testBody').textContent`), /1 of 2 stories after the filters \(1 left out\)/);
   await shot('05-test');
   await ev(`document.querySelector('#dlgTest').close(); document.querySelector('#btnSettings').click()`);
   await sleep(300);

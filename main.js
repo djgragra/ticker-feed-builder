@@ -3,11 +3,10 @@ import path from 'node:path';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { createEngine } from './src/engine.js';
-import { createScheduler } from './src/scheduler.js';
+import { createRuntime } from './src/runtime.js';
 import { createLogger } from './src/logger.js';
-import { createAlerter, sendTelegram, sendEmail } from './src/notify.js';
-import { createStore, exportable, newProfile, sanitizeSettings, sanitizeUrl } from './src/settings.js';
+import { sendTelegram, sendEmail } from './src/notify.js';
+import { createStore, exportable, newProfile, sanitizeSettings, sanitizeProfile, sanitizeUrl } from './src/settings.js';
 import { msg } from './src/messages.js';
 import { sanitizeFormat } from './src/format.js';
 import { checkForUpdate, downloadInstaller } from './src/updater.js';
@@ -24,7 +23,6 @@ let tray = null;
 let quitting = false;
 let keepAwakeId = null;
 let lastUpdateInfo = null;
-const status = {}; // profileId -> { lastRunAt, feeds: { feedId: result } }
 
 // ---- storage, log, engine ---------------------------------------------------------------------
 
@@ -45,11 +43,12 @@ const open = (v) => {
   }
 };
 
-let store, logger, engine, scheduler, alerter;
+let store, logger, runtime, engine, scheduler;
 const send = (channel, ...args) => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args);
 };
 const settings = () => store.get();
+const fullStatus = () => (runtime ? runtime.fullStatus() : { active: false, profiles: {} });
 
 function init() {
   store = createStore({ file: path.join(app.getPath('userData'), 'settings.json'), seal, open });
@@ -59,62 +58,21 @@ function init() {
     onEntry: (e) => send('log:entry', e)
   });
   logger.prune();
-  engine = createEngine({
-    log: (level, m) => logger.log(level, m),
-    builtinPlaceholder: () => fsp.readFile(path.join(__dirname, 'assets', 'placeholder.jpg'))
-  });
-  alerter = createAlerter({
+  runtime = createRuntime({
     getSettings: settings,
     log: (level, m) => logger.log(level, m),
+    stateFile: path.join(app.getPath('userData'), 'state.json'),
+    builtinPlaceholder: () => fsp.readFile(path.join(__dirname, 'assets', 'placeholder.jpg')),
     notifyDesktop: (text) => {
       if (Notification.isSupported()) new Notification({ title: 'Ticker Feed Builder', body: text }).show();
-    }
-  });
-  scheduler = createScheduler({
-    getProfiles: () => settings().profiles,
-    run: runProfile,
-    onState: () => {
-      send('status:update', fullStatus());
+    },
+    onStatus: (s) => {
+      send('status:update', s);
       refreshTray();
     }
   });
-}
-
-async function runProfile(profile, opts = {}) {
-  const lang = settings().language;
-  const st = (status[profile.id] ||= { feeds: {} });
-  const results = await engine.runProfile(profile, (feed, r) => {
-    st.feeds[feed.id] = r;
-    st.lastRunAt = Date.now();
-    send('status:update', fullStatus());
-  }, opts);
-  const feeds = profile.feeds.filter((f) => f.enabled);
-  const dirDown = Object.values(results).some((r) => r.code === 'output-missing');
-  alerter.check(`dir:${profile.id}`, !dirDown, {
-    downText: () => msg(lang, 'dir', profile.name, profile.outputDir),
-    upText: () => msg(lang, 'dirUp', profile.name)
-  });
-  if (!dirDown) {
-    for (const f of feeds) {
-      const r = results[f.id];
-      if (!r) continue; // not due in this run (own interval): nothing new to judge
-      alerter.check(`feed:${f.id}`, !!r?.ok, {
-        downText: (n) => msg(lang, 'down', profile.name, f.folder, n, r?.error || '?'),
-        upText: () => msg(lang, 'up', profile.name, f.folder)
-      });
-    }
-  }
-  // drop the state of feeds that no longer exist
-  for (const id of Object.keys(st.feeds)) if (!profile.feeds.some((f) => f.id === id)) delete st.feeds[id];
-  send('status:update', fullStatus());
-  refreshTray();
-}
-
-function fullStatus() {
-  const snap = scheduler?.snapshot() || { active: false, profiles: {} };
-  const profiles = {};
-  for (const p of settings().profiles) profiles[p.id] = { ...(status[p.id] || { feeds: {} }), ...(snap.profiles[p.id] || {}) };
-  return { active: snap.active, profiles };
+  engine = runtime.engine;
+  scheduler = runtime.scheduler;
 }
 
 // ---- window, tray, menu -----------------------------------------------------------------------
@@ -175,9 +133,10 @@ function trayImage() {
 
 function summary() {
   let ok = 0, bad = 0;
+  const st = fullStatus().profiles;
   for (const p of settings().profiles) {
     for (const f of p.feeds.filter((x) => x.enabled)) {
-      const r = status[p.id]?.feeds?.[f.id];
+      const r = st[p.id]?.feeds?.[f.id];
       if (r) (r.ok ? ok++ : bad++);
     }
   }
@@ -188,7 +147,7 @@ function refreshTray() {
   if (!tray) return;
   const { ok, bad } = summary();
   const l = settings().language;
-  const active = scheduler.isActive();
+  const active = runtime.scheduler.isActive();
   tray.setToolTip(`Ticker Feed Builder — ${active ? '' : msg(l, 'paused') + ' — '}${ok} OK${bad ? `, ${bad} ${msg(l, 'withProblems')}` : ''}`);
   tray.setContextMenu(
     Menu.buildFromTemplate([
@@ -202,8 +161,8 @@ function refreshTray() {
 }
 
 function setPaused(paused) {
-  if (paused) scheduler.stop();
-  else scheduler.start({ immediately: true });
+  if (paused) runtime.stop();
+  else runtime.start({ immediately: true });
   refreshTray();
 }
 
@@ -240,7 +199,12 @@ app.whenReady().then(() => {
   tray = new Tray(trayImage());
   tray.on('click', showWindow);
   applySystemSettings();
-  if (g.runOnLaunch) scheduler.start();
+  runtime.loadState();
+  if (g.runOnLaunch) runtime.start();
+  else {
+    runtime.start({ immediately: false }); // the timer of the daily summary runs anyway
+    runtime.stop();
+  }
   refreshTray();
   setInterval(() => logger.prune(), 6 * 3600_000).unref();
   app.on('activate', showWindow);
@@ -249,7 +213,7 @@ app.on('second-instance', showWindow);
 app.on('window-all-closed', () => {});
 app.on('before-quit', () => {
   quitting = true;
-  scheduler?.stop();
+  runtime?.dispose();
   store?.flush();
 });
 
@@ -258,7 +222,7 @@ app.on('before-quit', () => {
 const afterSettingsChange = () => {
   applySystemSettings();
   applyTheme();
-  scheduler.refresh();
+  runtime.refresh();
   refreshTray();
   send('settings:changed', settings());
 };
@@ -276,20 +240,19 @@ ipcMain.handle('settings:update', (_e, patch) => {
 ipcMain.handle('profile:save', (_e, profile) => {
   if (!profile || typeof profile !== 'object') return null;
   const saved = store.saveProfile(profile);
-  scheduler.refresh();
+  runtime.refresh();
   return saved;
 });
 
 ipcMain.handle('profile:create', (_e, name, starter) => {
   const p = store.saveProfile(newProfile(String(name || '').slice(0, 60) || 'Profile', !!starter));
-  scheduler.refresh();
+  runtime.refresh();
   return p;
 });
 
 ipcMain.handle('profile:delete', (_e, id) => {
   store.deleteProfile(String(id));
-  delete status[id];
-  scheduler.refresh();
+  runtime.refresh();
   return true;
 });
 
@@ -307,12 +270,15 @@ ipcMain.handle('scheduler:set-paused', (_e, paused) => {
   return fullStatus();
 });
 
-ipcMain.handle('feed:test', async (_e, feed, profileId) => {
-  const url = sanitizeUrl(feed?.url);
-  if (!url) return { ok: false, error: 'invalid URL' };
-  const profile = settings().profiles.find((p) => p.id === profileId) || null; // for the real placeholder of that profile
+ipcMain.handle('feed:test', async (_e, feed, profileId, raw) => {
+  const base = settings().profiles.find((p) => p.id === profileId) || null;
+  if (!feed || typeof feed !== 'object') return { ok: false, error: 'invalid feed' };
+  // the page may hold edits that are not saved yet: use them, checked like any saved feed
+  const merged = sanitizeProfile({ ...(base || {}), feeds: [...(base?.feeds || []).filter((f) => f.id !== feed.id), feed] });
+  const clean = merged.feeds.find((f) => f.id === feed.id) || merged.feeds.at(-1);
+  if (clean.type !== 'merge' && !clean.url) return { ok: false, error: 'invalid URL' };
   try {
-    return { ok: true, ...(await engine.previewFeed({ url, insecureTls: !!feed.insecureTls }, 6, profile)) };
+    return { ok: true, ...(await engine.previewFeed(clean, 8, base ? { ...merged, id: base.id } : null, { raw: !!raw })) };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -394,6 +360,16 @@ ipcMain.handle('email:test', async (_e, cfg) => {
     return { ok: false, error: err.message };
   }
 });
+
+ipcMain.handle('digest:send', () => runtime.digestNow());
+
+ipcMain.handle('cli:info', () => ({
+  exe: process.execPath,
+  script: path.join(app.getAppPath(), 'src', 'cli.js'),
+  settingsFile: path.join(app.getPath('userData'), 'settings.json'),
+  dataDir: path.join(app.getPath('userData'), 'headless'),
+  platform: process.platform
+}));
 
 ipcMain.handle('open-external', (_e, url) => {
   if (typeof url === 'string' && EXTERNAL_OK.test(url)) shell.openExternal(url);

@@ -25,6 +25,13 @@ It replaces the `rss_ticker_downloader.py` scripts that fed NeMedia Morpheus fro
 - **Checks**: each profile has a check interval (default 5 min) and each feed can have its own. A check first asks the server whether the feed changed (`ETag` / `Last-Modified`; answer 304 = nothing is downloaded). If the server cannot say, the feed is downloaded and its content compared with the previous copy (same content = no image download, no file touched). Images are downloaded and files written only when something is new; a failed image is retried at the next check, and a deleted output file or an edited setting triggers a rebuild. "Run now" always rebuilds everything.
 - **Dashboard** (its own button above the profile list): date and time, schedule state, feeds OK / with problems, a time-ordered list of the next checks (what will be checked and when, with countdown), per profile and per feed last check and last file update with date and time, recent warnings and errors. Profiles show in the order of the left column.
 - **Profile order**: drag the profiles in the left column, use the ▲▼ buttons or Alt + arrow keys, or press A–Z for alphabetical order. The order is saved and the dashboard follows it.
+- **Choosing the stories**: per feed, keep only stories with certain words or leave out others (case and accents ignored, title only or title + description), remove same-title duplicates, order newest first; the filters work before the item limit. A profile can leave out a story already used by an earlier feed. **Merged feeds** put the latest stories of several feeds in one folder (newest first, no duplicates). The test dialog shows the stories exactly as they would be written (file names, title and description lines, image).
+- **Time windows**: a profile can be checked only in certain hours and days (e.g. 06:00–24:00), and a window can have its own interval. Outside the windows nothing is checked and the files stay as they are.
+- **Frozen-feed alert**: alert when a feed answers but has had no new stories for N hours (per profile or per feed), and again on recovery. **Daily summary** at chosen times on Telegram and/or email.
+- **File check**: after writing, the files are read back (as many title and description lines as stories, every image a real JPEG); a failed check or a file locked by a player counts as a failed feed.
+- **Memory between restarts**: what each feed looked like is saved, so after a restart an unchanged feed is not rebuilt and no image is downloaded again.
+- **WebP and AVIF** images are converted to JPEG with WebAssembly decoders (can be switched off per profile).
+- **Headless mode** (`src/cli.js`): the same engine without a window, for a server or a machine that must update the ticker after a restart before anyone logs in. See "Headless mode" below.
 - **Alerts**: desktop notification, Telegram and/or email (SMTP) when a feed fails N runs in a row, when an output folder disappears, and on recovery. Telegram and email take several recipients; the email goes out as one message with all recipients in Bcc. Passwords and tokens stay on the computer, encrypted with the system keystore when available, and are never exported. With an SMTP user name the connection must be encrypted (STARTTLS or TLS). Each channel has a test button.
 - Feed test with preview (nothing is written), live log with daily log files, settings export/import (the Telegram token is never exported), update check against the public GitHub releases with a download verified against `SHA256SUMS.txt`, start with the computer, keep-awake option.
 - Languages: English (default, the app always opens in English), Italiano, Español; the choice is remembered. Theme: dark (default), light, or follow the system.
@@ -57,7 +64,7 @@ No measurements or standards-based formulas. The external rules used:
 
 ## Assumptions and limits
 
-- Images are decoded with a pure-JavaScript library (jimp): JPEG, PNG, GIF, BMP and TIFF work; WebP and AVIF do not (the story gets the placeholder). A native library would cover more formats but complicates building for three systems.
+- Images are decoded without native modules: JPEG, PNG, GIF, BMP and TIFF with a JavaScript library (jimp), WebP and AVIF with WebAssembly decoders (@jsquash, Apache-2.0). A very large AVIF can take a few seconds; an image that cannot be read gets the placeholder.
 - Images on private network addresses (localhost, 10.x, 172.16–31.x, 192.168.x…) are ignored for feeds on the public internet; DNS names that resolve to private addresses are not detected.
 - "Skip certificate check" keeps the connection encrypted but does not verify the server; it is off by default and is switched on in the starter set only for the Adnkronos feeds, as the original scripts did.
 - The computer must stay on and awake. The app asks the system not to sleep (option), but cannot stop a forced sleep or shutdown.
@@ -69,12 +76,12 @@ Results as of October 2026.
 
 | Reference | What it validates | Result | How to re-run |
 |---|---|---|---|
-| Automated tests (19) | text cleaning, RSS/Atom parsing, line/image sync, empty values, orphan removal, unchanged files, change detection (304, same content, failed-image retry, deleted output, per-feed interval), failure keeps old files, missing folder not created, private image addresses, scheduler, alerts | pass | `npm test` |
+| Automated tests (31) | text cleaning, RSS/Atom parsing, line/image sync, empty values, orphan removal, unchanged files, change detection (304, same content, failed-image retry, deleted output, per-feed interval), WebP/AVIF decoding, time windows, filters, merged feeds, duplicates across feeds, file check, remembered state, frozen-feed alert, daily summary, headless CLI, failure keeps old files, missing folder not created, private image addresses, scheduler, alerts | pass | `npm test` |
 | Original Python script v3.2 on 8 live feeds (2026-10-08, macOS) | same titles and descriptions as the original for the same feeds | 14 of 16 text files byte-identical; the other 2 differ only because the feeds changed between the two runs (stories shifted by one); one title carried an invisible BOM character in the original, which the app removes | run both on the same feeds and compare (`cmp`) |
 | Same run | number of images per feed | equal for all 8 feeds | same |
 | End-to-end on the real Electron app (macOS) | create profile, run, files on disk, status in the UI, language switch, no console errors | pass | `node dev/e2e-electron.mjs [screenshotDir]` |
 
-**Not validated**: playback in NeMedia Morpheus or any other ticker system; Windows (paths, drives, file locking by a player, installer); Linux; runs lasting days; Telegram and email delivery against real services (unit-tested with fakes only); Windows-1252 output beyond a unit test. This is not a certified tool.
+**Not validated**: WebP/AVIF with real-world files from publishers (only synthetic images in the tests); the headless mode on Windows and as a service; playback in NeMedia Morpheus or any other ticker system; Windows (paths, drives, file locking by a player, installer); Linux; runs lasting days; Telegram and email delivery against real services (unit-tested with fakes only); Windows-1252 output beyond a unit test. This is not a certified tool.
 
 ## Sources to re-check
 
@@ -97,10 +104,21 @@ node dev/e2e-electron.mjs   # end-to-end on the real app
 npm run dist:mac   # or dist:win / dist:linux
 ```
 
+## Headless mode
+
+`src/cli.js` runs the same engine, schedules, filters, alerts (Telegram, email) and daily summary without a window or tray (no desktop notifications).
+
+```bash
+node src/cli.js --settings exported-settings.json --data ./tfb-data          # runs until stopped (Ctrl+C)
+node src/cli.js --settings exported-settings.json --data ./tfb-data --once   # one run, then exit
+```
+
+The installed app can run it without Node.js: `ELECTRON_RUN_AS_NODE=1 "<app executable>" "<resources>/app.asar/src/cli.js" --settings … --data …` (the exact command for this computer is shown in Settings → Headless mode). `--once` exits with 0 (all feeds fine), 1 (some problem) or 2 (settings unusable). Use the file written by "Export settings"; it contains no secrets, so set `TFB_TELEGRAM_TOKEN` and `TFB_SMTP_PASS` in the environment. The file is read again every 30 seconds. On Windows start it with Task Scheduler at startup ("run whether the user is logged on or not"), on Linux with a systemd service, on macOS with launchd. Logs and the remembered state go to the `--data` folder.
+
 ## Structure
 
 - `main.js`, `preload.cjs` — Electron main process and bridge.
-- `src/` — the engine, independent of Electron: `engine.js` (download → convert → write), `feed.js`, `text.js`, `image.js`, `output.js`, `format.js`, `http.js`, `scheduler.js`, `notify.js`, `settings.js`, `logger.js`, `updater.js`.
+- `src/` — the engine, independent of Electron: `engine.js` (download → filter → convert → write → check), `runtime.js` (engine + scheduler + alerts + summary + remembered state, shared by the app and the headless mode), `cli.js`, `feed.js`, `filters.js`, `schedule-rules.js`, `digest.js`, `text.js`, `image.js`, `image-modern.js`, `output.js`, `format.js`, `http.js`, `scheduler.js`, `notify.js`, `messages.js`, `settings.js`, `logger.js`, `updater.js`.
 - `renderer/` — the interface (strict CSP, no inline scripts or styles, no CDN, system fonts).
 - `dev/` — tests, end-to-end script, icon and placeholder generators.
 
@@ -108,4 +126,4 @@ Versions are `YY.M.N` (e.g. `26.10.1`), tags `vYY.M.N`.
 
 ## Credits
 
-[fast-xml-parser](https://github.com/NaturalIntelligence/fast-xml-parser) (MIT), [jimp](https://github.com/jimp-dev/jimp) (MIT), [iconv-lite](https://github.com/ashtuchkin/iconv-lite) (MIT), [nodemailer](https://nodemailer.com/) (MIT-0), [Electron](https://www.electronjs.org/) (MIT). No fonts are bundled.
+[fast-xml-parser](https://github.com/NaturalIntelligence/fast-xml-parser) (MIT), [jimp](https://github.com/jimp-dev/jimp) (MIT), [iconv-lite](https://github.com/ashtuchkin/iconv-lite) (MIT), [nodemailer](https://nodemailer.com/) (MIT-0), [@jsquash/webp and @jsquash/avif](https://github.com/jamsinclair/jSquash) (Apache-2.0), [Electron](https://www.electronjs.org/) (MIT). No fonts are bundled.

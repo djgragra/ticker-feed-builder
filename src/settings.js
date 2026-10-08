@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DEFAULT_FORMAT, safeName, sanitizeFormat } from './format.js';
+import { isTime } from './schedule-rules.js';
 
 export const MAX_PROFILES = 20;
 export const MAX_FEEDS = 100;
@@ -30,11 +31,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
     runOnLaunch: true, // start the schedules as soon as the app opens
     keepAwake: true, // do not let the computer sleep: a sleeping computer stops updating the ticker
     logRetentionDays: 30,
-    checkUpdates: true
+    checkUpdates: true,
+    rememberState: true // keep what each feed looked like across restarts (no needless downloads after a restart)
   },
   notifications: {
     desktop: true,
     failThreshold: 3, // alert after this many failed runs in a row
+    digest: { enabled: false, times: ['08:00'] }, // a daily summary on the enabled channels (Telegram, email)
     telegram: { enabled: false, botToken: '', recipients: [] }, // recipients: [{ chatId, note }]
     email: { enabled: false, host: '', port: 587, secure: false, user: '', pass: '', from: '', recipients: [] } // recipients: [address]
   },
@@ -73,27 +76,68 @@ export function sanitizeUrl(u) {
   }
 }
 
+const words = (v) => {
+  const list = Array.isArray(v) ? v : String(v || '').split(/[\n,;]+/);
+  const seen = new Set();
+  return list.map((x) => String(x || '').trim().slice(0, 60)).filter((x) => x && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase())).slice(0, 50);
+};
+
+export function sanitizeFilters(f) {
+  const r = isObj(f) ? f : {};
+  return {
+    include: words(r.include),
+    exclude: words(r.exclude),
+    scope: r.scope === 'title' ? 'title' : 'both',
+    sort: r.sort === 'newest' ? 'newest' : 'feed',
+    dedupe: !!r.dedupe
+  };
+}
+
 function sanitizeFeed(raw, ids, folders) {
   const r = isObj(raw) ? raw : {};
   let folder = safeName(r.folder, 'Feed');
   const base = folder;
   for (let n = 2; folders.has(folder.toLowerCase()); n++) folder = `${base}_${n}`;
   folders.add(folder.toLowerCase());
+  const type = r.type === 'merge' ? 'merge' : 'feed';
   return {
     id: id(r.id, ids),
+    type, // 'feed' = downloads a URL; 'merge' = the latest stories of several other feeds of this profile in one folder
     folder,
-    url: sanitizeUrl(r.url),
+    url: type === 'merge' ? '' : sanitizeUrl(r.url),
+    sources: type === 'merge' ? [...new Set((Array.isArray(r.sources) ? r.sources : []).map(String))].slice(0, MAX_FEEDS) : [],
     maxItems: clamp(r.maxItems, 1, 100, 10),
     intervalMin: clamp(r.intervalMin, 0, 1440, 0), // 0 = the profile's interval
+    staleHours: clamp(r.staleHours, 0, 720, 0), // 0 = the profile's value; alert when no new stories for that long
+    filters: sanitizeFilters(r.filters),
     enabled: r.enabled !== false,
     insecureTls: !!r.insecureTls
   };
+}
+
+const DAYS_ALL = [0, 1, 2, 3, 4, 5, 6];
+export function sanitizeSchedule(raw) {
+  const r = isObj(raw) ? raw : {};
+  const windows = (Array.isArray(r.windows) ? r.windows : []).slice(0, 12).map((w) => {
+    const days = [...new Set((Array.isArray(w?.days) ? w.days : DAYS_ALL).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
+    return {
+      days: days.length ? days : DAYS_ALL,
+      from: isTime(w?.from) ? String(w.from).padStart(5, '0') : '06:00',
+      to: isTime(w?.to) ? String(w.to).padStart(5, '0') : '24:00',
+      intervalMin: clamp(w?.intervalMin, 0, 1440, 0) // 0 = the profile's interval
+    };
+  });
+  return { enabled: !!r.enabled, windows };
 }
 
 export function sanitizeProfile(raw, ids = new Set()) {
   const r = isObj(raw) ? raw : {};
   const feedIds = new Set();
   const folders = new Set();
+  const feeds = (Array.isArray(r.feeds) ? r.feeds : []).slice(0, MAX_FEEDS).map((f) => sanitizeFeed(f, feedIds, folders));
+  // a merged feed can only use ordinary feeds of the same profile
+  const normal = new Set(feeds.filter((f) => f.type === 'feed').map((f) => f.id));
+  for (const f of feeds) f.sources = f.sources.filter((sid) => normal.has(sid));
   return {
     id: id(r.id, ids),
     name: String(r.name || '').trim().slice(0, 60) || 'Profile',
@@ -101,7 +145,11 @@ export function sanitizeProfile(raw, ids = new Set()) {
     outputDir: String(r.outputDir || '').trim().slice(0, 1000),
     placeholderPath: String(r.placeholderPath || '').trim().slice(0, 1000),
     intervalMin: clamp(r.intervalMin, 1, 1440, 5),
-    feeds: (Array.isArray(r.feeds) ? r.feeds : []).slice(0, MAX_FEEDS).map((f) => sanitizeFeed(f, feedIds, folders)),
+    staleHours: clamp(r.staleHours, 0, 720, 0), // 0 = off
+    dedupeAcrossFeeds: !!r.dedupeAcrossFeeds, // a story already used by an earlier feed of the profile is left out of the later ones
+    verifyOutput: r.verifyOutput !== false, // read the files back after writing and check they agree
+    schedule: sanitizeSchedule(r.schedule),
+    feeds,
     format: sanitizeFormat(r.format)
   };
 }
@@ -114,11 +162,14 @@ export function sanitizeSettings(s) {
   const ids = new Set();
   out.profiles = (Array.isArray(out.profiles) ? out.profiles : []).slice(0, MAX_PROFILES).map((p) => sanitizeProfile(p, ids));
   const g = out.general;
-  for (const k of ['startOnBoot', 'startMinimized', 'runOnLaunch', 'keepAwake', 'checkUpdates']) g[k] = !!g[k];
+  for (const k of ['startOnBoot', 'startMinimized', 'runOnLaunch', 'keepAwake', 'checkUpdates', 'rememberState']) g[k] = !!g[k];
   g.logRetentionDays = clamp(g.logRetentionDays, 1, 365, 30);
   const n = out.notifications;
   n.desktop = !!n.desktop;
   n.failThreshold = clamp(n.failThreshold, 1, 100, 3);
+  const dg = isObj(n.digest) ? n.digest : {};
+  const times = [...new Set((Array.isArray(dg.times) ? dg.times : String(dg.times || '').split(/[\s,;]+/)).map((x) => String(x).trim()).filter((x) => isTime(x) && x !== '24:00').map((x) => x.padStart(5, '0')))].sort().slice(0, 6);
+  n.digest = { enabled: !!dg.enabled, times: times.length ? times : ['08:00'] };
   n.telegram.enabled = !!n.telegram.enabled;
   n.telegram.botToken = String(n.telegram.botToken || '').trim().slice(0, 200);
   n.telegram.recipients = (Array.isArray(n.telegram.recipients) ? n.telegram.recipients : [])

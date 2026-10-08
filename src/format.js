@@ -20,6 +20,7 @@ export const DEFAULT_FORMAT = Object.freeze({
   imagePad: 5,
   imageExt: 'JPG',
   jpegQuality: 85,
+  modernImages: true, // decode WebP and AVIF (off = such images get the placeholder)
   resize: 'none', // 'none' | 'cover' | 'contain'
   width: 0,
   height: 0,
@@ -58,6 +59,7 @@ export function sanitizeFormat(f) {
     imagePad: clamp(o.imagePad, 1, 8, 5),
     imageExt: /^[A-Za-z0-9]{1,5}$/.test(String(o.imageExt)) ? String(o.imageExt) : d.imageExt,
     jpegQuality: clamp(o.jpegQuality, 30, 100, 85),
+    modernImages: o.modernImages !== false,
     resize: ['none', 'cover', 'contain'].includes(o.resize) ? o.resize : 'none',
     width: clamp(o.width, 0, 8000, 0),
     height: clamp(o.height, 0, 8000, 0),

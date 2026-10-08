@@ -1,6 +1,6 @@
 {
   "name": "ticker-feed-builder",
-  "version": "26.10.4",
+  "version": "26.10.5",
   "description": "Turns RSS feeds into numbered text lines and JPG images for TV tickers and playout graphics, on a schedule",
   "main": "main.js",
   "type": "module",
@@ -17,7 +17,8 @@
     "dist": "electron-builder",
     "dist:win": "electron-builder --win",
     "dist:mac": "electron-builder --mac",
-    "dist:linux": "electron-builder --linux"
+    "dist:linux": "electron-builder --linux",
+    "cli": "node src/cli.js"
   },
   "devDependencies": {
     "electron": "^44.4.3",
@@ -72,6 +73,8 @@
     }
   },
   "dependencies": {
+    "@jsquash/avif": "^2.1.1",
+    "@jsquash/webp": "^1.5.0",
     "fast-xml-parser": "^5.11.2",
     "iconv-lite": "^0.7.3",
     "jimp": "^1.6.1",

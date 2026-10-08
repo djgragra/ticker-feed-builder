@@ -1,7 +1,15 @@
 // One timer per profile. A profile never runs twice at once; the next run starts `intervalMin` after the
 // previous one STARTED (or right away when the run took longer than the interval).
+import { scheduleState } from './schedule-rules.js';
+
 // The profile wakes up as often as its most frequent feed needs; runProfile skips the feeds that are not due yet.
 export const tickMinutes = (p) => Math.min(p.intervalMin, ...p.feeds.filter((f) => f.enabled && f.intervalMin > 0).map((f) => f.intervalMin));
+
+// The profile as it is right now: inside a time window with its own interval, that interval replaces the profile's.
+export function effectiveProfile(p, date = new Date()) {
+  const sch = scheduleState(p, date);
+  return { profile: sch.intervalMin ? { ...p, intervalMin: sch.intervalMin } : p, ...sch };
+}
 
 export function createScheduler({ getProfiles, run, now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout, onState = () => {} }) {
   const timers = new Map(); // profileId -> handle
@@ -27,6 +35,11 @@ export function createScheduler({ getProfiles, run, now = Date.now, setTimer = s
     timers.delete(pid);
     const p = getProfiles().find((x) => x.id === pid);
     if (!p || (!manual && (!active || !p.enabled))) return emit();
+    if (!manual) {
+      // outside the time windows of the profile: sleep until the next one starts
+      const w = effectiveProfile(p, new Date(now()));
+      if (!w.active) { arm(p, Math.max(1000, Math.min(w.untilStartMs, 6 * 3600_000))); return emit(); }
+    }
     if (running.has(pid)) return arm(p, 5000);
     const started = now();
     running.add(pid);
@@ -38,14 +51,14 @@ export function createScheduler({ getProfiles, run, now = Date.now, setTimer = s
     }
     running.delete(pid);
     const cur = getProfiles().find((x) => x.id === pid);
-    if (active && cur && cur.enabled) arm(cur, Math.max(1000, tickMinutes(cur) * 60_000 - (now() - started)));
+    if (active && cur && cur.enabled) arm(cur, Math.max(1000, tickMinutes(effectiveProfile(cur, new Date(now())).profile) * 60_000 - (now() - started)));
     emit();
   }
 
   return {
     start({ immediately = true } = {}) {
       active = true;
-      for (const p of getProfiles()) if (p.enabled && !timers.has(p.id) && !running.has(p.id)) arm(p, immediately ? 0 : tickMinutes(p) * 60_000);
+      for (const p of getProfiles()) if (p.enabled && !timers.has(p.id) && !running.has(p.id)) arm(p, immediately ? 0 : tickMinutes(effectiveProfile(p, new Date(now())).profile) * 60_000);
       emit();
     },
     stop() {
@@ -64,7 +77,7 @@ export function createScheduler({ getProfiles, run, now = Date.now, setTimer = s
         if (!p.enabled) { clearTimer(timers.get(p.id)); timers.delete(p.id); nextAt.delete(p.id); continue; }
         if (!running.has(p.id)) {
           const left = nextAt.has(p.id) ? nextAt.get(p.id) - now() : 0;
-          arm(p, Math.min(Math.max(0, left), tickMinutes(p) * 60_000));
+          arm(p, Math.min(Math.max(0, left), tickMinutes(effectiveProfile(p, new Date(now())).profile) * 60_000));
         }
       }
       emit();

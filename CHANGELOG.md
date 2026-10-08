@@ -1,5 +1,18 @@
 # Changelog
 
+## 26.10.5 — 2026-10-08
+
+- **Filters and order** per feed: required / excluded words (case and accents ignored, title only or title + description), same-title duplicates, newest first. Filters work before the item limit. A profile can also leave out a story already used by an earlier feed.
+- **Merged feeds**: the latest stories of several feeds in one folder, newest first, no duplicates.
+- **Preview** shows the stories exactly as they would be written (file names, title and description lines, image), optionally the raw feed.
+- **Time windows** per profile (days and hours, optional own interval per window).
+- **Frozen-feed alert** (no new stories for N hours, per profile or feed) and **daily summary** on Telegram / email.
+- **File check** after writing (line counts, real JPEG images) and clear messages for files locked by a player.
+- **Memory between restarts**: no rebuild and no image download after a restart for an unchanged feed.
+- **WebP and AVIF** images are now converted (WebAssembly decoders), switchable per profile.
+- **Headless mode** (`src/cli.js`, also runnable by the installed app without Node.js) for servers or machines that must work before anyone logs in.
+- All of these can be switched off or left empty; new options are in the new "Schedule & options" tab, the feed Options dialog and Settings.
+
 ## 26.10.4 — 2026-10-08
 
 - Email alerts (SMTP): server, port, TLS/STARTTLS, user, password, sender and **several recipients** (one message, all in Bcc). Telegram already took several chat IDs. Test button for each channel. With a user name the connection must be encrypted; the password is stored encrypted with the system keystore when available and never exported.

@@ -23,7 +23,9 @@ contextBridge.exposeInMainWorld('api', {
     runNow: (id) => ipcRenderer.invoke('profile:run', id),
     openOutput: (id) => ipcRenderer.invoke('profile:open-output', id)
   },
-  feed: { test: (feed, profileId) => ipcRenderer.invoke('feed:test', feed, profileId) },
+  feed: { test: (feed, profileId, raw) => ipcRenderer.invoke('feed:test', feed, profileId, raw) },
+  digest: { send: () => ipcRenderer.invoke('digest:send') },
+  cliInfo: () => ipcRenderer.invoke('cli:info'),
   placeholderPreview: (file) => ipcRenderer.invoke('placeholder:preview', file),
   scheduler: {
     status: () => ipcRenderer.invoke('scheduler:status'),

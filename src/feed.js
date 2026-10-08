@@ -51,6 +51,15 @@ function pickImage(it) {
   return m ? clean(m[1]) : null;
 }
 
+const DATE_FIELDS = ['pubDate', 'dc:date', 'published', 'updated', 'a10:updated', 'lastBuildDate'];
+function pickDate(it) {
+  for (const k of DATE_FIELDS) {
+    const t = Date.parse(text(it[k]));
+    if (Number.isFinite(t)) return t;
+  }
+  return null;
+}
+
 export function parseFeed(xml, baseUrl) {
   const root = parser.parse(Buffer.isBuffer(xml) ? xml.toString('utf8') : String(xml));
   const nodes = arr(root?.rss?.channel?.item).length
@@ -69,7 +78,7 @@ export function parseFeed(xml, baseUrl) {
       }
     }
     const description = text(it.description) || text(it['content:encoded']) || text(it.summary) || text(it.content);
-    items.push({ title: cleanText(text(it.title)), description: cleanText(description), image });
+    items.push({ title: cleanText(text(it.title)), description: cleanText(description), image, date: pickDate(it) });
   }
   return items;
 }

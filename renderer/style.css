@@ -187,3 +187,17 @@ hr { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
 .dcard { margin-bottom: 14px; }
 .dgrid .dcard { margin-bottom: 0; }
 .tiles { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
+
+/* options tab, feed dialog, preview */
+.wrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; max-width: 860px; }
+.wrow input[type=text] { width: 64px; text-align: center; }
+.days { display: flex; gap: 6px; flex-wrap: wrap; margin-right: 8px; }
+.day { display: inline-flex; align-items: center; gap: 3px; }
+.opts .sec { max-width: 860px; }
+.form textarea { width: 100%; font-family: var(--mono); font-size: 12px; }
+.tfile { font: 11px var(--mono); color: var(--muted); margin-bottom: 2px; }
+.tdate { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.tcard .tt { overflow-wrap: anywhere; }
+
+pre.cmd { background: var(--log-bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: 12px var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; margin: 4px 0; }
+.sec h4 { margin: 8px 0 4px; font-size: 13px; }
