@@ -700,7 +700,7 @@ $('#btnSortAz').onclick = sortProfilesAz;
 $('#theme').onchange = async (e) => { await patchSettings({ theme: e.target.value }); applyTheme(); };
 $('#lang').onchange = async (e) => { await patchSettings({ language: e.target.value }); applyLang(); };
 $('#newCreate').onclick = async () => {
-  const p = await api.profiles.create($('#newName').value.trim() || t('new.defaultName'), $('#newStarter').checked);
+  const p = await api.profiles.create($('#newName').value.trim() || t('new.defaultName'));
   state.settings.profiles.push(p);
   $('#dlgNew').close();
   state.tab = 'feeds';

@@ -10,18 +10,6 @@ import { isTime } from './schedule-rules.js';
 export const MAX_PROFILES = 20;
 export const MAX_FEEDS = 100;
 
-// Public Italian news feeds the original scripts used: a starting point, the user edits or removes them.
-export const STARTER_FEEDS = Object.freeze([
-  { folder: 'Politica', url: 'https://www.adnkronos.com/RSS_Politica.xml', maxItems: 10, insecureTls: true },
-  { folder: 'Cronaca', url: 'https://www.adnkronos.com/RSS_Cronaca.xml', maxItems: 10, insecureTls: true },
-  { folder: 'Esteri', url: 'https://www.adnkronos.com/RSS_Esteri.xml', maxItems: 10, insecureTls: true },
-  { folder: 'Sport', url: 'https://www.adnkronos.com/RSS_Sport.xml', maxItems: 10, insecureTls: true },
-  { folder: 'Economia', url: 'https://www.adnkronos.com/RSS_Economia.xml', maxItems: 10, insecureTls: true },
-  { folder: 'Sostenibilita', url: 'https://www.adnkronos.com/RSS_Sostenibilita.xml', maxItems: 5, insecureTls: true },
-  { folder: 'Tecnologia', url: 'https://www.adnkronos.com/RSS_CyberNews.xml', maxItems: 5, insecureTls: true },
-  { folder: 'AnsaTopNews', url: 'https://www.ansa.it/sito/notizie/topnews/topnews_gn_rss.xml', maxItems: 25, insecureTls: false }
-]);
-
 export const DEFAULT_SETTINGS = Object.freeze({
   language: 'en', // 'en' | 'it' | 'es' — the app always starts in English until the user changes it
   profiles: [],
@@ -191,12 +179,9 @@ export function sanitizeSettings(s) {
   return out;
 }
 
-export function newProfile(name, withStarterFeeds = false) {
-  return sanitizeProfile({
-    name,
-    feeds: withStarterFeeds ? STARTER_FEEDS.map((f) => ({ ...f })) : [],
-    format: { ...DEFAULT_FORMAT }
-  });
+// A new profile starts with no feed: the user adds the feeds he or she is entitled to use.
+export function newProfile(name) {
+  return sanitizeProfile({ name, feeds: [], format: { ...DEFAULT_FORMAT } });
 }
 
 // Settings without secrets, for the JSON export / import

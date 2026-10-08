@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   profiles: {
     save: (profile) => ipcRenderer.invoke('profile:save', profile),
-    create: (name, starter) => ipcRenderer.invoke('profile:create', name, starter),
+    create: (name) => ipcRenderer.invoke('profile:create', name),
     remove: (id) => ipcRenderer.invoke('profile:delete', id),
     reorder: (ids) => ipcRenderer.invoke('profile:reorder', ids),
     runNow: (id) => ipcRenderer.invoke('profile:run', id),

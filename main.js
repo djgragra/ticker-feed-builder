@@ -244,8 +244,8 @@ ipcMain.handle('profile:save', (_e, profile) => {
   return saved;
 });
 
-ipcMain.handle('profile:create', (_e, name, starter) => {
-  const p = store.saveProfile(newProfile(String(name || '').slice(0, 60) || 'Profile', !!starter));
+ipcMain.handle('profile:create', (_e, name) => {
+  const p = store.saveProfile(newProfile(String(name || '').slice(0, 60) || 'Profile'));
   runtime.refresh();
   return p;
 });

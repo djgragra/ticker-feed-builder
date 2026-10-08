@@ -1,5 +1,10 @@
 # Changelog
 
+## 26.10.6 — 2026-10-08
+
+- Starter feed set removed; the app starts empty. A new profile has no feed and asks you to add the first one (only feeds you are entitled to use: see "Feeds and publishers' terms" in the help and the README).
+- "Skip certificate check" is off by default for every feed.
+
 ## 26.10.5 — 2026-10-08
 
 - **Filters and order** per feed: required / excluded words (case and accents ignored, title only or title + description), same-title duplicates, newest first. Filters work before the item limit. A profile can also leave out a story already used by an earlier feed.
@@ -24,7 +29,6 @@
 ## 26.10.3 — 2026-10-08
 
 - Publishers' terms: a visible note under the feed list and in the new-profile dialog, and a new help section "Feeds and publishers' terms" with what the ANSA and Adnkronos RSS pages say (read on 2026-10-08): free to download does not mean free to broadcast; public display needs an agreement with the publisher.
-- The starter feed set (ANSA, Adnkronos) is for testing only and will be removed before the public release.
 
 ## 26.10.2 — 2026-10-08
 

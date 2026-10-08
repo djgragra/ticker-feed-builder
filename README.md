@@ -40,7 +40,7 @@ The default layout is the one the original scripts produced for NeMedia Morpheus
 
 ## Feeds and publishers' terms
 
-A feed that is free to download is not necessarily free to broadcast. Publishers usually offer RSS for personal reading; showing their headlines publicly on TV, screens or websites normally needs an agreement with the publisher. That responsibility is the user's; this is not legal advice. The app is meant to ship **without any feed**; the examples below come from the pages read on 8 October 2026 (paraphrased; the pages carry no version or date, so read the current text before relying on it).
+A feed that is free to download is not necessarily free to broadcast. Publishers usually offer RSS for personal reading; showing their headlines publicly on TV, screens or websites normally needs an agreement with the publisher. That responsibility is the user's; this is not legal advice. The app ships **without any feed**; the examples below come from the pages read on 8 October 2026 (paraphrased; the pages carry no version or date, so read the current text before relying on it).
 
 | Publisher | What its RSS page says | Page |
 |---|---|---|
@@ -66,7 +66,7 @@ No measurements or standards-based formulas. The external rules used:
 
 - Images are decoded without native modules: JPEG, PNG, GIF, BMP and TIFF with a JavaScript library (jimp), WebP and AVIF with WebAssembly decoders (@jsquash, Apache-2.0). A very large AVIF can take a few seconds; an image that cannot be read gets the placeholder.
 - Images on private network addresses (localhost, 10.x, 172.16–31.x, 192.168.x…) are ignored for feeds on the public internet; DNS names that resolve to private addresses are not detected.
-- "Skip certificate check" keeps the connection encrypted but does not verify the server; it is off by default and is switched on in the starter set only for the Adnkronos feeds, as the original scripts did.
+- "Skip certificate check" keeps the connection encrypted but does not verify the server; it is off by default and meant only for feeds you trust (some publishers serve their feeds with a broken certificate).
 - The computer must stay on and awake. The app asks the system not to sleep (option), but cannot stop a forced sleep or shutdown.
 - Whether a server supports conditional requests depends on the server; without it every check downloads the feed XML (small) but still skips images and writes when the content is identical. Stories are taken in the order of the feed; there is no de-duplication across feeds.
 
@@ -77,7 +77,7 @@ Results as of October 2026.
 | Reference | What it validates | Result | How to re-run |
 |---|---|---|---|
 | Automated tests (31) | text cleaning, RSS/Atom parsing, line/image sync, empty values, orphan removal, unchanged files, change detection (304, same content, failed-image retry, deleted output, per-feed interval), WebP/AVIF decoding, time windows, filters, merged feeds, duplicates across feeds, file check, remembered state, frozen-feed alert, daily summary, headless CLI, failure keeps old files, missing folder not created, private image addresses, scheduler, alerts | pass | `npm test` |
-| Original Python script v3.2 on 8 live feeds (2026-10-08, macOS) | same titles and descriptions as the original for the same feeds | 14 of 16 text files byte-identical; the other 2 differ only because the feeds changed between the two runs (stories shifted by one); one title carried an invisible BOM character in the original, which the app removes | run both on the same feeds and compare (`cmp`) |
+| Original Python script v3.2 on 8 live feeds (2026-10-08, macOS; a one-off development check with the feeds the script used, not part of the app) | same titles and descriptions as the original for the same feeds | 14 of 16 text files byte-identical; the other 2 differ only because the feeds changed between the two runs (stories shifted by one); one title carried an invisible BOM character in the original, which the app removes | run both on the same feeds and compare (`cmp`) |
 | Same run | number of images per feed | equal for all 8 feeds | same |
 | End-to-end on the real Electron app (macOS) | create profile, run, files on disk, status in the UI, language switch, no console errors | pass | `node dev/e2e-electron.mjs [screenshotDir]` |
 

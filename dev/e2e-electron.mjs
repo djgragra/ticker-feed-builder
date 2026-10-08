@@ -83,11 +83,12 @@ try {
 
   // create a profile through the real UI path
   await ev(`document.querySelector('#btnNewProfile').click()`);
-  await ev(`document.querySelector('#newName').value = 'E2E'; document.querySelector('#newStarter').checked = false; document.querySelector('#newCreate').click()`);
+  await ev(`document.querySelector('#newName').value = 'E2E'; document.querySelector('#newCreate').click()`);
   await sleep(500);
   const prof = await ev(`api.settings.get().then(s => s.profiles[0])`);
   assert.equal(prof.name, 'E2E');
-  assert.equal(prof.feeds.length, 0);
+  assert.equal(prof.feeds.length, 0); // a new profile starts empty
+  assert.match(await ev(`document.querySelector('#main').textContent`), /Add your first feed/);
 
   const saved = await ev(`api.profiles.save(${JSON.stringify({ ...prof, outputDir: out, feeds: [{ id: 'f1', folder: 'News', url: base + '/feed.xml', maxItems: 5, enabled: true, insecureTls: false }] })})`);
   assert.equal(saved.outputDir, out);
