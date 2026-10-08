@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.10.8 — 2026-10-08
+
+- Release build: the test for the stale-feed alert and the daily summary waited a fixed 120 ms after every run and failed on a slow build machine (it blocked the 26.10.7 release). It now waits for the run to really finish. No change to the app: the 26.10.7 interface changes (email and Telegram settings) are in this release.
+
 ## 26.10.7 — 2026-10-08
 
 - Email and Telegram settings laid out like in the other OnAir Garage apps: SMTP fields in a grid (server, port, user, password, from, several recipients separated by commas), Telegram recipients as rows (chat ID + note, add / remove), and a "Send test" button with its result next to it for each channel.

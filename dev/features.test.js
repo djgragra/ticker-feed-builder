@@ -212,7 +212,9 @@ test('runtime: stale feed alert once, recovery once; daily summary goes to the e
   });
   const prof = settings.profiles[0];
   const settle = () => new Promise((r) => setTimeout(r, 120));
-  const run = async () => { rt.engine.clearCaches(); rt.scheduler.runNow(prof.id); await settle(); };
+  // wait for the run to really finish (a fixed pause is too short on a slow CI runner), then let the alerts go out
+  const idle = async () => { for (let i = 0; i < 1000 && rt.scheduler.isRunning(prof.id); i++) await new Promise((r) => setTimeout(r, 10)); };
+  const run = async () => { rt.engine.clearCaches(); rt.scheduler.runNow(prof.id); await idle(); await settle(); };
   await run();
   assert.equal(desktop.length, 0);
   t += 3 * 3600_000; // three hours later: same content
