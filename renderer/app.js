@@ -577,20 +577,43 @@ function renderSettings() {
   const dg = n.digest;
   const gen = (key, label) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: g[key], onchange: async (e) => { await patchSettings({ general: { [key]: e.target.checked } }); } }), h('span', { text: t(label) }));
   const msgBox = h('div', { class: 'hint', id: 'setMsg' });
-  const tokenInput = h('input', { type: 'password', value: tg.botToken, autocomplete: 'off', spellcheck: false, onchange: (e) => patchSettings({ notifications: { telegram: { botToken: e.target.value } } }) });
-  const chats = h('textarea', { rows: 3, spellcheck: false, value: tg.recipients.map((r) => (r.note ? `${r.chatId} ${r.note}` : r.chatId)).join('\n'), onchange: (e) => {
-    const recipients = e.target.value.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const i = l.search(/\s/); return i < 0 ? { chatId: l, note: '' } : { chatId: l.slice(0, i), note: l.slice(i).trim() }; });
-    patchSettings({ notifications: { telegram: { recipients } } });
-  } });
-  const emailText = (key, ph) => h('input', { type: 'text', value: em[key], placeholder: ph, spellcheck: false, onchange: (e) => patchSettings({ notifications: { email: { [key]: e.target.value } } }) });
-  const emailNum = (key) => h('input', { type: 'number', min: 1, max: 65535, value: em[key], onchange: (e) => patchSettings({ notifications: { email: { [key]: Number(e.target.value) } } }) });
-  const emailPass = h('input', { type: 'password', value: em.pass, autocomplete: 'off', spellcheck: false, onchange: (e) => patchSettings({ notifications: { email: { pass: e.target.value } } }) });
-  const emailTo = h('textarea', { rows: 4, spellcheck: false, value: em.recipients.join('\n'), onchange: () => saveEmailRecipients() });
+  // Email and Telegram: same fields, labels and behaviour as the other OnAir Garage apps (Dead Air Watchdog)
+  const mail = (patch) => patchSettings({ notifications: { email: patch } });
+  const field = (labelKey, control) => h('label', { class: 'field' }, h('span', { text: t(labelKey) }), control);
+  const mRes = h('span', { class: 'testres', role: 'status' });
+  const tRes = h('span', { class: 'testres', role: 'status' });
+  const mHost = h('input', { type: 'text', value: em.host, placeholder: 'smtp.example.org', spellcheck: false, onchange: (e) => mail({ host: e.target.value }) });
+  const mPort = h('input', { type: 'number', min: 1, max: 65535, value: em.port, class: 'num', onchange: (e) => mail({ port: Number(e.target.value) || 587 }) });
+  const mUser = h('input', { type: 'text', value: em.user, spellcheck: false, autocomplete: 'off', onchange: (e) => mail({ user: e.target.value }) });
+  const mPass = h('input', { type: 'password', value: em.pass, autocomplete: 'new-password', onchange: (e) => mail({ pass: e.target.value }) });
+  const mFrom = h('input', { type: 'text', value: em.from, placeholder: 'alerts@example.org', spellcheck: false, onchange: (e) => mail({ from: e.target.value }) });
+  const mTo = h('input', { type: 'text', id: 'mTo', value: em.recipients.join(', '), placeholder: 'engineer@example.org', spellcheck: false, onchange: () => saveEmailRecipients() });
+  const mSecure = h('input', { type: 'checkbox', checked: em.secure, onchange: (e) => mail({ secure: e.target.checked }) });
+  const typedAddresses = () => mTo.value.split(/[\s,;]+/).filter(Boolean);
   const saveEmailRecipients = async () => {
-    const typed = emailTo.value.split(/[\s,;]+/).filter(Boolean);
-    const next = await patchSettings({ notifications: { email: { recipients: typed } } });
-    emailTo.value = next.notifications.email.recipients.join('\n'); // show what was kept
-    if (next.notifications.email.recipients.length < new Set(typed.map((x) => x.toLowerCase())).size) msgBox.textContent = t('s.emailDropped');
+    const typed = typedAddresses();
+    const next = await mail({ recipients: typed });
+    mTo.value = next.notifications.email.recipients.join(', '); // show what was kept
+    if (next.notifications.email.recipients.length < new Set(typed.map((x) => x.toLowerCase())).size) { mRes.className = 'testres is-fail'; mRes.textContent = t('s.emailDropped'); }
+  };
+  const tToken = h('input', { type: 'password', value: tg.botToken, spellcheck: false, autocomplete: 'new-password', placeholder: '123456789:AA...', onchange: (e) => patchSettings({ notifications: { telegram: { botToken: e.target.value.trim() } } }) });
+  const tRecipients = h('div', { id: 'tRecipients' });
+  const readRecipients = () => [...tRecipients.querySelectorAll('.rec')].map((row) => { const [c, n2] = row.querySelectorAll('input'); return { chatId: c.value.trim(), note: n2.value.trim() }; }).filter((r) => r.chatId);
+  const saveRecipients = () => patchSettings({ notifications: { telegram: { recipients: readRecipients() } } });
+  const addRecipientRow = (r = { chatId: '', note: '' }) => {
+    const row = h('div', { class: 'rec' },
+      h('input', { type: 'text', value: r.chatId, placeholder: t('set.tg.chat'), 'aria-label': t('set.tg.chat'), spellcheck: false, onchange: saveRecipients }),
+      h('input', { type: 'text', value: r.note || '', placeholder: t('set.tg.note'), 'aria-label': t('set.tg.note'), onchange: saveRecipients }),
+      h('button', { type: 'button', class: 'btn small', text: t('set.tg.remove'), onclick: () => { row.remove(); saveRecipients(); } }));
+    tRecipients.append(row);
+  };
+  tg.recipients.forEach(addRecipientRow);
+  const runTest = async (out, fn) => {
+    out.className = 'testres';
+    out.textContent = t('set.test.sending');
+    const r = await fn();
+    out.textContent = r.ok ? t('set.test.ok') : t('set.test.fail', { error: r.error });
+    out.classList.add(r.ok ? 'is-ok' : 'is-fail');
   };
   const cmdApp = h('pre', { class: 'cmd' });
   const cmdNode = h('pre', { class: 'cmd' });
@@ -609,24 +632,22 @@ function renderSettings() {
       h('p', { class: 'hint', text: t('s.alertsHint') }),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: n.desktop, onchange: (e) => patchSettings({ notifications: { desktop: e.target.checked } }) }), h('span', { text: t('s.desktop') })),
       h('div', { class: 'check' }, h('span', { text: t('s.threshold') }), h('input', { type: 'number', min: 1, max: 100, value: n.failThreshold, onchange: (e) => patchSettings({ notifications: { failThreshold: Number(e.target.value) } }) }), h('span', { text: t('s.failures') })),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: tg.enabled, onchange: (e) => patchSettings({ notifications: { telegram: { enabled: e.target.checked } } }) }), h('span', { text: t('s.tgEnable') })),
-      h('label', { class: 'field' }, h('span', { text: t('s.tgToken') }), tokenInput),
-      h('label', { class: 'field' }, h('span', { text: t('s.tgChats') }), chats),
-      h('p', { class: 'hint', text: t('s.tgNote') }),
-      h('button', { class: 'btn', text: t('s.tgTest'), onclick: async () => { await patchSettings({ notifications: { telegram: { botToken: tokenInput.value } } }); const r = await api.telegram.test({ botToken: tokenInput.value, recipients: state.settings.notifications.telegram.recipients }); msgBox.textContent = r.ok ? t('s.tgOk') : r.error; } }),
-      h('hr', {}),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: em.enabled, onchange: (e) => patchSettings({ notifications: { email: { enabled: e.target.checked } } }) }), h('span', { text: t('s.emailEnable') })),
-      h('div', { class: 'form' },
-        h('label', { text: t('s.emailHost') }), h('div', { class: 'inline' }, emailText('host', 'smtp.example.com'), h('span', { text: t('s.emailPort') }), emailNum('port')),
-        h('label', { text: '' }), h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: em.secure, onchange: (e) => patchSettings({ notifications: { email: { secure: e.target.checked } } }) }), h('span', { text: t('s.emailSecure') })),
-        h('label', { text: t('s.emailUser') }), emailText('user', ''),
-        h('label', { text: t('s.emailPass') }), emailPass,
-        h('label', { text: t('s.emailFrom') }), emailText('from', 'alerts@example.com'),
-        h('label', { text: t('s.emailTo') }), emailTo),
+      h('p', { class: 'hint', text: t('set.n.local') }),
+
+      h('h4', { class: 'sub', text: t('set.mail.title') }),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: em.enabled, onchange: (e) => mail({ enabled: e.target.checked }) }), h('span', { text: t('set.mail.enable') })),
+      h('div', { class: 'cols' }, field('set.mail.host', mHost), field('set.mail.port', mPort), field('set.mail.user', mUser), field('set.mail.pass', mPass), field('set.mail.from', mFrom), field('set.mail.to', mTo)),
+      h('label', { class: 'check' }, mSecure, h('span', { text: t('set.mail.secure') })),
       h('p', { class: 'hint', text: t('s.emailNote') }),
-      h('button', { class: 'btn', text: t('s.emailTest'), onclick: async () => { await saveEmailRecipients(); const c = state.settings.notifications.email; const r = await api.email.test({ ...c, pass: emailPass.value }); msgBox.textContent = r.ok ? t('s.emailOk') : r.error; } }),
-      h('hr', {}),
-      h('h4', { text: t('s.digest') }),
+      h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn small', id: 'mTest', text: t('set.test'), onclick: () => runTest(mRes, async () => { await saveEmailRecipients(); return api.email.test({ host: mHost.value.trim(), port: Number(mPort.value) || 587, secure: mSecure.checked, user: mUser.value.trim(), pass: mPass.value, from: mFrom.value.trim(), recipients: typedAddresses() }); }) }), mRes),
+
+      h('h4', { class: 'sub', text: t('set.tg.title') }),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: tg.enabled, onchange: (e) => patchSettings({ notifications: { telegram: { enabled: e.target.checked } } }) }), h('span', { text: t('set.tg.enable') })),
+      field('set.tg.token', tToken),
+      h('div', { class: 'field' }, h('span', { text: t('set.tg.recipients') }), tRecipients, h('div', {}, h('button', { type: 'button', class: 'btn small', id: 'tAdd', text: t('set.tg.add'), onclick: () => addRecipientRow() }))),
+      h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn small', id: 'tTest', text: t('set.test'), onclick: () => runTest(tRes, () => api.telegram.test({ botToken: tToken.value.trim(), recipients: readRecipients() })) }), tRes),
+
+      h('h4', { class: 'sub', text: t('s.digest') }),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: dg.enabled, onchange: (e) => patchSettings({ notifications: { digest: { enabled: e.target.checked } } }) }), h('span', { text: t('s.digestOn') })),
       h('div', { class: 'check' }, h('span', { text: t('s.digestTimes') }), h('input', { type: 'text', value: dg.times.join(', '), size: 22, onchange: async (e) => { const next = await patchSettings({ notifications: { digest: { times: e.target.value.split(/[\s,;]+/).filter(Boolean) } } }); e.target.value = next.notifications.digest.times.join(', '); } })),
       h('button', { class: 'btn', text: t('s.digestNow'), onclick: async () => { const nn = state.settings.notifications; if (!nn.telegram.enabled && !nn.email.enabled) { msgBox.textContent = t('s.digestNone'); return; } await api.digest.send(); msgBox.textContent = t('s.digestSent'); } })),

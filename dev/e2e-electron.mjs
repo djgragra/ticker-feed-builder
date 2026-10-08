@@ -162,6 +162,14 @@ try {
   await shot('05-test');
   await ev(`document.querySelector('#dlgTest').close(); document.querySelector('#btnSettings').click()`);
   await sleep(300);
+  // notifications as in the other apps: Telegram recipient rows, comma-separated email addresses
+  await ev(`document.querySelector('#tAdd').click()`);
+  await ev(`(() => { const [c, n] = document.querySelectorAll('#tRecipients .rec')[0].querySelectorAll('input'); c.value = '123456'; c.dispatchEvent(new Event('change')); n.value = 'Engineer'; n.dispatchEvent(new Event('change')); })()`);
+  await ev(`(() => { const m = document.querySelector('#mTo'); m.value = 'a@x.org, b@y.it, bad'; m.dispatchEvent(new Event('change')); })()`);
+  await sleep(600);
+  assert.deepEqual(await ev(`api.settings.get().then(s => s.notifications.telegram.recipients)`), [{ chatId: '123456', note: 'Engineer' }]);
+  assert.deepEqual(await ev(`api.settings.get().then(s => s.notifications.email.recipients)`), ['a@x.org', 'b@y.it']);
+  assert.equal(await ev(`document.querySelector('#mTo').value`), 'a@x.org, b@y.it');
   await shot('06-settings');
   await ev(`document.querySelector('#settingsBody').scrollTop = 99999`);
   await sleep(200);

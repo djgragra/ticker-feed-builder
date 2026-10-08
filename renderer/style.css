@@ -205,3 +205,14 @@ pre.cmd { background: var(--log-bg); border: 1px solid var(--line); border-radiu
 table.feeds td:nth-child(2) { min-width: 110px; }
 table.feeds td.st { min-width: 150px; }
 table.feeds td.url { width: 36%; min-width: 220px; }
+
+/* notification settings, as in the other OnAir Garage apps */
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 4px 20px; }
+.field input[type=text], .field input[type=password], .field input[type=number], .field select { width: 100%; }
+.field input.num { width: 110px; }
+.rec { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 6px; align-items: center; }
+.row { display: flex; align-items: center; gap: 12px; margin: 6px 0; flex-wrap: wrap; }
+.testres { font-size: 13px; color: var(--muted); }
+.testres.is-ok { color: var(--ok); }
+.testres.is-fail { color: var(--bad); }
+.sec h4.sub { border-top: 1px solid var(--line); padding-top: 14px; margin: 18px 0 6px; font-size: 13px; }
