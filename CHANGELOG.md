@@ -41,7 +41,7 @@
 
 First release. Replaces the three `rss_ticker_downloader.py` scripts (v3.2) with one desktop app.
 
-- Profiles: each with its own output folder, feed list, refresh interval, placeholder image and output format (the three old script copies GR / GRNEWS / root become three profiles).
+- Profiles: each with its own output folder, feed list, refresh interval, placeholder image and output format (several copies of the old script, one per destination, become several profiles).
 - Same default output as the original scripts for NeMedia Morpheus: `<Folder>_Title.Txt`, `<Folder>_Description.Txt`, `<Folder>/00001.JPG…`, `<Folder>_metadata.json`.
 - Built-in scheduler and tray icon (no Windows Task Scheduler), start with the computer, keep-awake option.
 - Output format is configurable: text encoding, line ending, file name templates, image numbering and extension, JPEG quality, optional resize (cover / contain), title and description length limits.

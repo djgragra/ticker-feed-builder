@@ -7,6 +7,10 @@ Downloads RSS feeds on a schedule and turns each one into numbered text lines an
 - License: MIT (see `LICENSE`)
 - Systems: Windows (installer), macOS (dmg, Apple silicon and Intel), Linux (AppImage, x64). Built for all three; **only macOS has been run so far** (see Validation).
 
+![Dashboard of Ticker Feed Builder](docs/screenshots/01-dashboard.png)
+
+_Screenshots use invented demo feeds, taken on macOS (dark and light themes)._
+
 ## What it does
 
 It replaces the `rss_ticker_downloader.py` scripts that fed NeMedia Morpheus from Windows Task Scheduler. The app lives in the tray, runs 24/7 and, for every feed of every profile, writes:

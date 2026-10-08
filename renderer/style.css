@@ -201,3 +201,7 @@ hr { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
 
 pre.cmd { background: var(--log-bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: 12px var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; margin: 4px 0; }
 .sec h4 { margin: 8px 0 4px; font-size: 13px; }
+
+table.feeds td:nth-child(2) { min-width: 110px; }
+table.feeds td.st { min-width: 150px; }
+table.feeds td.url { width: 36%; min-width: 220px; }
