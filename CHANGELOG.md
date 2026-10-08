@@ -1,10 +1,13 @@
 # Changelog
 
+## 26.10.7 — 2026-10-08
+
+- Email and Telegram settings laid out like in the other OnAir Garage apps: SMTP fields in a grid (server, port, user, password, from, several recipients separated by commas), Telegram recipients as rows (chat ID + note, add / remove), and a "Send test" button with its result next to it for each channel.
+
 ## 26.10.6 — 2026-10-08
 
 - Starter feed set removed; the app starts empty. A new profile has no feed and asks you to add the first one (only feeds you are entitled to use: see "Feeds and publishers' terms" in the help and the README).
 - "Skip certificate check" is off by default for every feed.
-- Email and Telegram settings laid out like in the other OnAir Garage apps: SMTP fields in a grid (server, port, user, password, from, several recipients separated by commas), Telegram recipients as rows (chat ID + note, add / remove), and a "Send test" button with its result next to it for each channel.
 
 ## 26.10.5 — 2026-10-08
 
