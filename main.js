@@ -9,6 +9,7 @@ import { createLogger } from './src/logger.js';
 import { createAlerter, sendTelegram } from './src/notify.js';
 import { createStore, exportable, newProfile, sanitizeSettings, sanitizeUrl } from './src/settings.js';
 import { msg } from './src/messages.js';
+import { sanitizeFormat } from './src/format.js';
 import { checkForUpdate, downloadInstaller } from './src/updater.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -79,14 +80,14 @@ function init() {
   });
 }
 
-async function runProfile(profile) {
+async function runProfile(profile, opts = {}) {
   const lang = settings().language;
   const st = (status[profile.id] ||= { feeds: {} });
   const results = await engine.runProfile(profile, (feed, r) => {
     st.feeds[feed.id] = r;
     st.lastRunAt = Date.now();
     send('status:update', fullStatus());
-  });
+  }, opts);
   const feeds = profile.feeds.filter((f) => f.enabled);
   const dirDown = Object.values(results).some((r) => r.code === 'output-missing');
   alerter.check(`dir:${profile.id}`, !dirDown, {
@@ -96,6 +97,7 @@ async function runProfile(profile) {
   if (!dirDown) {
     for (const f of feeds) {
       const r = results[f.id];
+      if (!r) continue; // not due in this run (own interval): nothing new to judge
       alerter.check(`feed:${f.id}`, !!r?.ok, {
         downText: (n) => msg(lang, 'down', profile.name, f.folder, n, r?.error || '?'),
         upText: () => msg(lang, 'up', profile.name, f.folder)
@@ -294,13 +296,22 @@ ipcMain.handle('scheduler:set-paused', (_e, paused) => {
   return fullStatus();
 });
 
-ipcMain.handle('feed:test', async (_e, feed) => {
+ipcMain.handle('feed:test', async (_e, feed, profileId) => {
   const url = sanitizeUrl(feed?.url);
   if (!url) return { ok: false, error: 'invalid URL' };
+  const profile = settings().profiles.find((p) => p.id === profileId) || null; // for the real placeholder of that profile
   try {
-    return { ok: true, ...(await engine.previewFeed({ url, insecureTls: !!feed.insecureTls }, 6)) };
+    return { ok: true, ...(await engine.previewFeed({ url, insecureTls: !!feed.insecureTls }, 6, profile)) };
   } catch (err) {
     return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('placeholder:preview', async (_e, file) => {
+  try {
+    return await engine.placeholderThumb({ placeholderPath: String(file || ''), format: sanitizeFormat({}) });
+  } catch {
+    return null;
   }
 });
 

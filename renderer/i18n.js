@@ -2,6 +2,12 @@
 // UI texts in English (default), Italian and Spanish. Missing keys fall back to English.
 const TEXTS = {
   en: {
+    'rail.dashboard': 'Dashboard', 'p.intervalHint': 'Each check asks the server whether the feed changed. Images are downloaded and files rewritten only when something is new. "Run now" always rebuilds everything. A feed can have its own interval in the table below.',
+    'f.every': 'Check every (min)', 'f.everyHint': 'Empty = the profile interval', 'f.unchanged': 'no change · {items} items', 'f.updated': 'updated',
+    'test.imgFailed': 'image failed → placeholder', 'p.phPreview': 'Placeholder as the ticker will get it:',
+    'dash.title': 'Dashboard', 'dash.schedules': 'Schedules', 'dash.feedsOk': 'Feeds OK', 'dash.problems': 'Problems', 'dash.nextCheck': 'Next check', 'dash.lastChange': 'Last file update', 'dash.notYet': 'not yet',
+    'dash.checked': 'Checked', 'dash.updated': 'Updated', 'dash.feed': 'Feed', 'dash.status': 'Status', 'dash.edit': 'Edit profile', 'dash.dirMissing': 'Output folder not reachable: nothing is being updated.', 'dash.disabled': 'disabled', 'dash.pending': 'waiting for the first check',
+    'dash.recent': 'Recent warnings and errors', 'dash.noProblems': 'No warnings or errors.', 'dash.noFeeds': 'No feeds in this profile.',
     'common.cancel': 'Cancel', 'common.delete': 'Delete', 'common.close': 'Close', 'common.yes': 'Yes', 'common.no': 'No',
     'rail.profiles': 'Profiles', 'rail.new': '+ New profile',
     'top.running': 'Schedules running', 'top.paused': 'Schedules paused', 'top.feedsOk': '{n} feeds OK', 'top.feedsBad': '{n} with problems', 'top.noProfiles': 'No profiles yet',
@@ -9,7 +15,7 @@ const TEXTS = {
     'help.open': 'How it works', 'help.title': 'How Ticker Feed Builder works', 'settings.open': 'Settings', 'settings.title': 'Settings',
     'new.title': 'New profile', 'new.name': 'Profile name', 'new.defaultName': 'Profile', 'new.starter': 'Start with the Italian news starter set', 'new.starterHint': 'Eight public feeds (Adnkronos and ANSA) the original scripts used. You can edit or remove any of them.', 'new.create': 'Create',
     'empty.title': 'No profile yet', 'empty.text': 'A profile is one destination: an output folder, a list of RSS feeds and how often to refresh them. Create one to start.', 'empty.create': 'Create the first profile',
-    'p.enabled': 'Active', 'p.interval': 'Refresh every', 'p.minutes': 'minutes', 'p.output': 'Output folder', 'p.placeholder': 'Placeholder image',
+    'p.enabled': 'Active', 'p.interval': 'Check feeds every', 'p.minutes': 'minutes', 'p.output': 'Output folder', 'p.placeholder': 'Placeholder image',
     'p.placeholderHint': 'Used when an item has no usable image. Empty = built-in neutral image.', 'p.outputPh': 'Choose the folder the ticker system reads', 'p.browse': 'Browse…', 'p.open': 'Open', 'p.clear': 'Clear',
     'p.runNow': 'Run now', 'p.delete': 'Delete profile', 'p.deleteTitle': 'Delete this profile?', 'p.deleteText': 'The profile and its feed list are removed from the app. Files already written in the output folder are not deleted.',
     'p.nextIn': 'next run in {t}', 'p.running': 'running now…', 'p.notScheduled': 'not scheduled', 'p.noOutput': 'Choose an output folder first',
@@ -37,6 +43,12 @@ const TEXTS = {
     'err.openFolder': 'Cannot open the folder.'
   },
   it: {
+    'rail.dashboard': 'Dashboard', 'p.intervalHint': 'Ogni controllo chiede al server se il feed è cambiato. Le immagini vengono scaricate e i file riscritti solo se c\'è qualcosa di nuovo. "Esegui ora" ricostruisce sempre tutto. Un feed può avere un intervallo suo nella tabella qui sotto.',
+    'f.every': 'Controlla ogni (min)', 'f.everyHint': 'Vuoto = intervallo del profilo', 'f.unchanged': 'nessun cambiamento · {items} notizie', 'f.updated': 'aggiornato',
+    'test.imgFailed': 'immagine non scaricata → segnaposto', 'p.phPreview': 'Segnaposto come lo riceverà il ticker:',
+    'dash.title': 'Dashboard', 'dash.schedules': 'Pianificazioni', 'dash.feedsOk': 'Feed OK', 'dash.problems': 'Problemi', 'dash.nextCheck': 'Prossimo controllo', 'dash.lastChange': 'Ultimo aggiornamento file', 'dash.notYet': 'non ancora',
+    'dash.checked': 'Controllato', 'dash.updated': 'Aggiornato', 'dash.feed': 'Feed', 'dash.status': 'Stato', 'dash.edit': 'Modifica profilo', 'dash.dirMissing': 'Cartella di output non raggiungibile: non si aggiorna nulla.', 'dash.disabled': 'disattivato', 'dash.pending': 'in attesa del primo controllo',
+    'dash.recent': 'Avvisi ed errori recenti', 'dash.noProblems': 'Nessun avviso né errore.', 'dash.noFeeds': 'Nessun feed in questo profilo.',
     'common.cancel': 'Annulla', 'common.delete': 'Elimina', 'common.close': 'Chiudi', 'common.yes': 'Sì', 'common.no': 'No',
     'rail.profiles': 'Profili', 'rail.new': '+ Nuovo profilo',
     'top.running': 'Pianificazioni attive', 'top.paused': 'Pianificazioni in pausa', 'top.feedsOk': '{n} feed OK', 'top.feedsBad': '{n} con problemi', 'top.noProfiles': 'Nessun profilo',
@@ -44,7 +56,7 @@ const TEXTS = {
     'help.open': 'Come funziona', 'help.title': 'Come funziona Ticker Feed Builder', 'settings.open': 'Impostazioni', 'settings.title': 'Impostazioni',
     'new.title': 'Nuovo profilo', 'new.name': 'Nome del profilo', 'new.defaultName': 'Profilo', 'new.starter': 'Parti dal set di notizie italiane', 'new.starterHint': 'Otto feed pubblici (Adnkronos e ANSA) usati dagli script originali. Puoi modificarli o toglierli.', 'new.create': 'Crea',
     'empty.title': 'Nessun profilo', 'empty.text': 'Un profilo è una destinazione: una cartella di output, un elenco di feed RSS e ogni quanto aggiornarli. Creane uno per iniziare.', 'empty.create': 'Crea il primo profilo',
-    'p.enabled': 'Attivo', 'p.interval': 'Aggiorna ogni', 'p.minutes': 'minuti', 'p.output': 'Cartella di output', 'p.placeholder': 'Immagine segnaposto',
+    'p.enabled': 'Attivo', 'p.interval': 'Controlla i feed ogni', 'p.minutes': 'minuti', 'p.output': 'Cartella di output', 'p.placeholder': 'Immagine segnaposto',
     'p.placeholderHint': 'Usata quando una notizia non ha un\'immagine utilizzabile. Vuoto = immagine neutra integrata.', 'p.outputPh': 'Scegli la cartella che legge il sistema dei ticker', 'p.browse': 'Sfoglia…', 'p.open': 'Apri', 'p.clear': 'Svuota',
     'p.runNow': 'Esegui ora', 'p.delete': 'Elimina profilo', 'p.deleteTitle': 'Eliminare questo profilo?', 'p.deleteText': 'Il profilo e il suo elenco di feed vengono rimossi dall\'app. I file già scritti nella cartella di output non vengono cancellati.',
     'p.nextIn': 'prossimo giro tra {t}', 'p.running': 'in esecuzione…', 'p.notScheduled': 'non pianificato', 'p.noOutput': 'Scegli prima una cartella di output',
@@ -72,6 +84,12 @@ const TEXTS = {
     'err.openFolder': 'Impossibile aprire la cartella.'
   },
   es: {
+    'rail.dashboard': 'Panel', 'p.intervalHint': 'Cada comprobación pregunta al servidor si el feed cambió. Las imágenes se descargan y los archivos se reescriben solo si hay algo nuevo. "Ejecutar ahora" reconstruye siempre todo. Un feed puede tener su propio intervalo en la tabla de abajo.',
+    'f.every': 'Comprobar cada (min)', 'f.everyHint': 'Vacío = intervalo del perfil', 'f.unchanged': 'sin cambios · {items} noticias', 'f.updated': 'actualizado',
+    'test.imgFailed': 'imagen no descargada → relleno', 'p.phPreview': 'Relleno tal como lo recibirá el ticker:',
+    'dash.title': 'Panel', 'dash.schedules': 'Programaciones', 'dash.feedsOk': 'Feeds OK', 'dash.problems': 'Problemas', 'dash.nextCheck': 'Próxima comprobación', 'dash.lastChange': 'Última actualización de archivos', 'dash.notYet': 'todavía no',
+    'dash.checked': 'Comprobado', 'dash.updated': 'Actualizado', 'dash.feed': 'Feed', 'dash.status': 'Estado', 'dash.edit': 'Editar perfil', 'dash.dirMissing': 'Carpeta de salida no accesible: no se actualiza nada.', 'dash.disabled': 'desactivado', 'dash.pending': 'esperando la primera comprobación',
+    'dash.recent': 'Avisos y errores recientes', 'dash.noProblems': 'Sin avisos ni errores.', 'dash.noFeeds': 'No hay feeds en este perfil.',
     'common.cancel': 'Cancelar', 'common.delete': 'Eliminar', 'common.close': 'Cerrar', 'common.yes': 'Sí', 'common.no': 'No',
     'rail.profiles': 'Perfiles', 'rail.new': '+ Nuevo perfil',
     'top.running': 'Programaciones activas', 'top.paused': 'Programaciones en pausa', 'top.feedsOk': '{n} feeds OK', 'top.feedsBad': '{n} con problemas', 'top.noProfiles': 'Aún no hay perfiles',
@@ -79,7 +97,7 @@ const TEXTS = {
     'help.open': 'Cómo funciona', 'help.title': 'Cómo funciona Ticker Feed Builder', 'settings.open': 'Ajustes', 'settings.title': 'Ajustes',
     'new.title': 'Nuevo perfil', 'new.name': 'Nombre del perfil', 'new.defaultName': 'Perfil', 'new.starter': 'Empezar con el conjunto de noticias italianas', 'new.starterHint': 'Ocho feeds públicos (Adnkronos y ANSA) que usaban los scripts originales. Puedes editarlos o quitarlos.', 'new.create': 'Crear',
     'empty.title': 'Aún no hay perfiles', 'empty.text': 'Un perfil es un destino: una carpeta de salida, una lista de feeds RSS y cada cuánto actualizarlos. Crea uno para empezar.', 'empty.create': 'Crear el primer perfil',
-    'p.enabled': 'Activo', 'p.interval': 'Actualizar cada', 'p.minutes': 'minutos', 'p.output': 'Carpeta de salida', 'p.placeholder': 'Imagen de relleno',
+    'p.enabled': 'Activo', 'p.interval': 'Comprobar los feeds cada', 'p.minutes': 'minutos', 'p.output': 'Carpeta de salida', 'p.placeholder': 'Imagen de relleno',
     'p.placeholderHint': 'Se usa cuando una noticia no tiene imagen utilizable. Vacío = imagen neutra integrada.', 'p.outputPh': 'Elige la carpeta que lee el sistema de tickers', 'p.browse': 'Examinar…', 'p.open': 'Abrir', 'p.clear': 'Vaciar',
     'p.runNow': 'Ejecutar ahora', 'p.delete': 'Eliminar perfil', 'p.deleteTitle': '¿Eliminar este perfil?', 'p.deleteText': 'El perfil y su lista de feeds se quitan de la app. Los archivos ya escritos en la carpeta de salida no se borran.',
     'p.nextIn': 'próxima ejecución en {t}', 'p.running': 'ejecutándose…', 'p.notScheduled': 'sin programar', 'p.noOutput': 'Elige primero una carpeta de salida',

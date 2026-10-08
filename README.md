@@ -22,6 +22,8 @@ It replaces the `rss_ticker_downloader.py` scripts that fed NeMedia Morpheus fro
 - **Sync guarantee**: story N is line N of both text files and image N. Line breaks and invisible characters inside a text are removed; an empty title/description becomes `-` (configurable); a missing or unreadable image becomes the placeholder image.
 - **Safe writes**: each file is written under a temporary name and renamed; unchanged files are not touched; if a download fails the previous files stay as they were; a missing output folder is reported and never created (an unplugged drive must not become a local folder); numbered images left over from a longer previous run are removed.
 - **Configurable format** (the defaults reproduce the original scripts): text encoding (UTF-8, UTF-8 with BOM, Windows-1252), line ending, file name templates (`{folder}`), image number start/digits/extension, JPEG quality, optional resize (fill or fit), title/description length limits.
+- **Checks**: each profile has a check interval (default 5 min) and each feed can have its own. A check first asks the server whether the feed changed (`ETag` / `Last-Modified`; answer 304 = nothing is downloaded). If the server cannot say, the feed is downloaded and its content compared with the previous copy (same content = no image download, no file touched). Images are downloaded and files written only when something is new; a failed image is retried at the next check, and a deleted output file or an edited setting triggers a rebuild. "Run now" always rebuilds everything.
+- **Dashboard**: all profiles at a glance (schedule state, feeds OK / with problems, next check, last file update, per feed last check and last update, recent warnings and errors).
 - **Alerts**: desktop notification and/or Telegram when a feed fails N runs in a row, when an output folder disappears, and on recovery. No email: it would need an SMTP server and a stored password.
 - Feed test with preview (nothing is written), live log with daily log files, settings export/import (the Telegram token is never exported), update check against the public GitHub releases with a download verified against `SHA256SUMS.txt`, start with the computer, keep-awake option.
 - Languages: English (default, the app always opens in English), Italiano, Español; the choice is remembered. Dark theme only (On-Air tool).
@@ -45,7 +47,7 @@ No measurements or standards-based formulas. The external rules used:
 - Images on private network addresses (localhost, 10.x, 172.16–31.x, 192.168.x…) are ignored for feeds on the public internet; DNS names that resolve to private addresses are not detected.
 - "Skip certificate check" keeps the connection encrypted but does not verify the server; it is off by default and is switched on in the starter set only for the Adnkronos feeds, as the original scripts did.
 - The computer must stay on and awake. The app asks the system not to sleep (option), but cannot stop a forced sleep or shutdown.
-- Stories are taken in the order of the feed; there is no de-duplication across feeds.
+- Whether a server supports conditional requests depends on the server; without it every check downloads the feed XML (small) but still skips images and writes when the content is identical. Stories are taken in the order of the feed; there is no de-duplication across feeds.
 
 ## Validation and references
 
@@ -53,7 +55,7 @@ Results as of October 2026.
 
 | Reference | What it validates | Result | How to re-run |
 |---|---|---|---|
-| Automated tests (13) | text cleaning, RSS/Atom parsing, line/image sync, empty values, orphan removal, unchanged files, failure keeps old files, missing folder not created, private image addresses, scheduler, alerts | pass | `npm test` |
+| Automated tests (16) | text cleaning, RSS/Atom parsing, line/image sync, empty values, orphan removal, unchanged files, change detection (304, same content, failed-image retry, deleted output, per-feed interval), failure keeps old files, missing folder not created, private image addresses, scheduler, alerts | pass | `npm test` |
 | Original Python script v3.2 on 8 live feeds (2026-10-08, macOS) | same titles and descriptions as the original for the same feeds | 14 of 16 text files byte-identical; the other 2 differ only because the feeds changed between the two runs (stories shifted by one); one title carried an invisible BOM character in the original, which the app removes | run both on the same feeds and compare (`cmp`) |
 | Same run | number of images per feed | equal for all 8 feeds | same |
 | End-to-end on the real Electron app (macOS) | create profile, run, files on disk, status in the UI, language switch, no console errors | pass | `node dev/e2e-electron.mjs [screenshotDir]` |

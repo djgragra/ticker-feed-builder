@@ -116,11 +116,12 @@ test('runFeed: unchanged content is not rewritten; fewer items remove orphan ima
   const h = engineWith({ feeds: { [feed.url]: six } });
   const r1 = await h.engine.runFeed(p, feed);
   assert.equal(r1.ok, true);
-  const r2 = await h.engine.runFeed(p, feed);
+  const r2 = await h.engine.runFeed(p, feed, { force: true }); // forced: rebuilds, but writes nothing that is identical
+  assert.equal(r2.filesWritten, 0);
   assert.equal(r2.filesUnchanged, 5 + 2);
   const two = RSS([1, 2].map((n) => item(`T${n}`, `D${n}`)).join(''));
   const h2 = engineWith({ feeds: { [feed.url]: two } });
-  const r3 = await h2.engine.runFeed(p, feed);
+  const r3 = await h2.engine.runFeed(p, feed, { force: true });
   assert.equal(r3.orphansRemoved, 3);
   assert.deepEqual((await fs.readdir(path.join(out, 'News'))).sort(), ['00001.JPG', '00002.JPG']);
 });
@@ -167,7 +168,7 @@ test('scheduler: runs at once, repeats by interval, never overlaps, pause stops'
   const timers = [];
   const setTimer = (fn, ms) => { const h = { fn, at: t + ms }; timers.push(h); return h; };
   const clearTimer = (h) => { const i = timers.indexOf(h); if (i >= 0) timers.splice(i, 1); };
-  const profiles = [{ id: 'p', enabled: true, intervalMin: 5 }];
+  const profiles = [{ id: 'p', enabled: true, intervalMin: 5, feeds: [] }];
   const calls = [];
   let release;
   const s = createScheduler({ getProfiles: () => profiles, run: (p) => new Promise((r) => { calls.push(t); release = r; }), now: () => t, setTimer, clearTimer });
@@ -200,4 +201,85 @@ test('alerter: alerts at the threshold once, then once on recovery', () => {
   assert.deepEqual(sent, ['down 3', 'up']);
   a.check('dir:p', false, texts); // output folder: immediate
   assert.equal(sent.length, 3);
+});
+
+test('change detection: unchanged feed is skipped (hash), 304 skips, deleted output or edited settings rebuild', async () => {
+  const out = await tmp();
+  const p = sanitizeProfile({ ...newProfile('P'), outputDir: out });
+  const feed = { id: 'f1', folder: 'News', url: 'https://f.test/a.xml', maxItems: 3, enabled: true, insecureTls: false };
+  let mode = 'full';
+  const calls = [];
+  const xml = RSS(item('A', 'a', 'https://i.test/1.png') + item('B', 'b', 'https://i.test/1.png'));
+  const get = async (url, opts) => {
+    calls.push({ url, h: opts.headers });
+    if (url === feed.url) {
+      if (mode === '304' && opts.headers['If-None-Match']) throw Object.assign(new Error('HTTP 304'), { status: 304 });
+      return { status: 200, body: Buffer.from(xml), url, headers: { etag: '"v1"', 'last-modified': 'Wed, 01 Oct 2026 10:00:00 GMT' } };
+    }
+    return { status: 200, body: PNG, url, headers: {} };
+  };
+  const engine = createEngine({ get, builtinPlaceholder: async () => PNG, retryDelayMs: 1, now: (() => { let t = 1000; return () => (t += 1000); })() });
+  const r1 = await engine.runFeed(p, feed);
+  assert.equal(r1.unchanged, false);
+  assert.equal(r1.changed, true);
+  // same content: no image download, nothing written
+  engine.clearCaches();
+  calls.length = 0;
+  const r2 = await engine.runFeed(p, feed);
+  assert.equal(r2.unchanged, true);
+  assert.equal(calls.filter((c) => c.url !== feed.url).length, 0);
+  assert.equal(calls[0].h['If-None-Match'], '"v1"'); // asked the server "changed?"
+  // server answers 304: not even the body is read
+  engine.clearCaches();
+  mode = '304';
+  assert.equal((await engine.runFeed(p, feed)).unchanged, true);
+  // an output file was deleted: rebuilt
+  await fs.rm(path.join(out, 'News', '00002.JPG'));
+  engine.clearCaches();
+  const r3 = await engine.runFeed(p, feed);
+  assert.equal(r3.unchanged, false);
+  assert.ok((await fs.readdir(path.join(out, 'News'))).includes('00002.JPG'));
+  // maxItems edited: rebuilt even though the feed did not change
+  engine.clearCaches();
+  const r4 = await engine.runFeed(p, { ...feed, maxItems: 1 });
+  assert.equal(r4.unchanged, false);
+  assert.equal(r4.items, 1);
+});
+
+test('change detection: a failed image is retried even if the feed did not change', async () => {
+  const out = await tmp();
+  const p = sanitizeProfile({ ...newProfile('P'), outputDir: out });
+  const feed = { id: 'f1', folder: 'News', url: 'https://f.test/a.xml', maxItems: 3, enabled: true, insecureTls: false };
+  const xml = RSS(item('A', 'a', 'https://i.test/1.png'));
+  let imageUp = false;
+  const get = async (url) => {
+    if (url === feed.url) return { status: 200, body: Buffer.from(xml), url, headers: {} };
+    if (!imageUp) throw new Error('HTTP 500');
+    return { status: 200, body: PNG, url, headers: {} };
+  };
+  const engine = createEngine({ get, builtinPlaceholder: async () => PNG, retryDelayMs: 1 });
+  const r1 = await engine.runFeed(p, feed);
+  assert.equal(r1.placeholders, 1);
+  imageUp = true;
+  engine.clearCaches();
+  const r2 = await engine.runFeed(p, feed);
+  assert.equal(r2.unchanged, false);
+  assert.equal(r2.imagesOriginal, 1);
+});
+
+test('runProfile: per-feed interval; force ignores it', async () => {
+  const out = await tmp();
+  let t = 0;
+  const get = async (url) => ({ status: 200, body: Buffer.from(RSS(item('A', 'a'))), url, headers: {} });
+  const engine = createEngine({ get, builtinPlaceholder: async () => PNG, now: () => t });
+  const p = sanitizeProfile({ ...newProfile('P'), outputDir: out, intervalMin: 5, feeds: [
+    { id: 'fast', folder: 'Fast', url: 'https://f.test/1.xml', intervalMin: 0 },
+    { id: 'slow', folder: 'Slow', url: 'https://f.test/2.xml', intervalMin: 30 }
+  ] });
+  assert.deepEqual(Object.keys(await engine.runProfile(p)).sort(), ['fast', 'slow']);
+  t = 5 * 60_000;
+  assert.deepEqual(Object.keys(await engine.runProfile(p)), ['fast']);
+  t = 30 * 60_000;
+  assert.deepEqual(Object.keys(await engine.runProfile(p)).sort(), ['fast', 'slow']);
+  assert.deepEqual(Object.keys(await engine.runProfile(p, () => {}, { force: true })).sort(), ['fast', 'slow']);
 });

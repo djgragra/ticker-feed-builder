@@ -22,7 +22,8 @@ contextBridge.exposeInMainWorld('api', {
     runNow: (id) => ipcRenderer.invoke('profile:run', id),
     openOutput: (id) => ipcRenderer.invoke('profile:open-output', id)
   },
-  feed: { test: (feed) => ipcRenderer.invoke('feed:test', feed) },
+  feed: { test: (feed, profileId) => ipcRenderer.invoke('feed:test', feed, profileId) },
+  placeholderPreview: (file) => ipcRenderer.invoke('placeholder:preview', file),
   scheduler: {
     status: () => ipcRenderer.invoke('scheduler:status'),
     setPaused: (paused) => ipcRenderer.invoke('scheduler:set-paused', paused)

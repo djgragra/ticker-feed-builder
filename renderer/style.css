@@ -131,3 +131,22 @@ table.feeds td.url { width: 46%; min-width: 260px; }
 table.feeds input[type=number] { width: 64px; }
 .form input[type=text], .form select:only-child { width: 100%; }
 .form .inline input[type=text] { width: auto; flex: 1; }
+
+/* dashboard */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 4px; }
+.tile-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.tile-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile.good .tile-value { color: var(--ok); } .tile.bad .tile-value { color: var(--bad); }
+.tile .btn { align-self: flex-start; margin-top: 2px; }
+.dgrid { display: flex; flex-direction: column; gap: 14px; margin-bottom: 14px; }
+.dcard { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.dcard-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.dcard-head h3 { font-size: 15px; }
+.dcard-actions { margin-left: auto; display: flex; gap: 6px; }
+.dcard .path { font: 12px var(--mono); color: var(--muted); margin-bottom: 6px; overflow-wrap: anywhere; }
+.alert-line { background: #2a1111; border-left: 3px solid var(--bad); color: var(--bad); padding: 6px 10px; border-radius: 0 6px 6px 0; margin: 6px 0; }
+.dtable td { font-size: 12px; }
+.log.short { height: auto; max-height: 220px; }
+.phprev { display: flex; flex-direction: column; gap: 4px; }
+.phprev img { border: 1px solid var(--line); border-radius: 6px; object-fit: cover; background: #0b0d10; }

@@ -94,7 +94,7 @@ try {
   await cdp('Page.reload');
   await sleep(1500);
   console.log('feeds after reload:', await ev(`api.settings.get().then(s => s.profiles[0].feeds.length + ' ' + s.profiles[0].outputDir)`));
-  await ev(`document.querySelector('.profile-item') && document.querySelector('.profile-item').click()`);
+  await ev(`document.querySelectorAll('.profile-item')[1].click()`);
   await ev(`document.querySelector('#btnRun').click()`);
   for (let i = 0; i < 40 && !fs.existsSync(path.join(out, 'News_Title.Txt')); i++) await sleep(250);
 
@@ -109,6 +109,12 @@ try {
   assert.deepEqual(errors, [], 'errors: ' + errors.join(' | '));
   assert.match(await ev(`document.querySelector('td.st').textContent`), /2 items/);
 
+  await ev(`document.querySelectorAll('.profile-item')[0].click()`); // dashboard
+  await sleep(300);
+  assert.match(await ev(`document.querySelector('#main').textContent`), /Feeds OK/);
+  await shot('02b-dashboard');
+  await ev(`document.querySelectorAll('.profile-item')[1].click()`);
+  await sleep(200);
   await ev(`document.querySelectorAll('.tab')[1].click()`);
   await sleep(200);
   await shot('03-format');

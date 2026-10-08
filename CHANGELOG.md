@@ -1,5 +1,12 @@
 # Changelog
 
+## 26.10.2 — 2026-10-08
+
+- Change detection: a check now asks the server whether the feed changed (ETag / Last-Modified) and compares the content with the previous run; images are downloaded and files written only when something is new. A failed image is retried at the next check; a deleted output file or edited setting triggers a rebuild. "Run now" always rebuilds everything. The `_metadata.json` file is rewritten only when something changed.
+- Scheduling: the check interval is now labelled and explained in the profile; each feed can have its own interval.
+- Dashboard: overview of all profiles and feeds (state, last check, last update, next check, recent problems). It is the start page.
+- The test preview and the profile page show the real placeholder image (also for items whose image could not be downloaded).
+
 ## 26.10.1 — 2026-10-08
 
 First release. Replaces the three `rss_ticker_downloader.py` scripts (v3.2) with one desktop app.

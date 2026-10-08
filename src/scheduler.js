@@ -1,5 +1,8 @@
 // One timer per profile. A profile never runs twice at once; the next run starts `intervalMin` after the
 // previous one STARTED (or right away when the run took longer than the interval).
+// The profile wakes up as often as its most frequent feed needs; runProfile skips the feeds that are not due yet.
+export const tickMinutes = (p) => Math.min(p.intervalMin, ...p.feeds.filter((f) => f.enabled && f.intervalMin > 0).map((f) => f.intervalMin));
+
 export function createScheduler({ getProfiles, run, now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout, onState = () => {} }) {
   const timers = new Map(); // profileId -> handle
   const nextAt = new Map(); // profileId -> ms
@@ -29,20 +32,20 @@ export function createScheduler({ getProfiles, run, now = Date.now, setTimer = s
     running.add(pid);
     emit();
     try {
-      await run(p);
+      await run(p, { force: manual });
     } catch {
       /* the run reports its own errors */
     }
     running.delete(pid);
     const cur = getProfiles().find((x) => x.id === pid);
-    if (active && cur && cur.enabled) arm(cur, Math.max(1000, cur.intervalMin * 60_000 - (now() - started)));
+    if (active && cur && cur.enabled) arm(cur, Math.max(1000, tickMinutes(cur) * 60_000 - (now() - started)));
     emit();
   }
 
   return {
     start({ immediately = true } = {}) {
       active = true;
-      for (const p of getProfiles()) if (p.enabled && !timers.has(p.id) && !running.has(p.id)) arm(p, immediately ? 0 : p.intervalMin * 60_000);
+      for (const p of getProfiles()) if (p.enabled && !timers.has(p.id) && !running.has(p.id)) arm(p, immediately ? 0 : tickMinutes(p) * 60_000);
       emit();
     },
     stop() {
@@ -61,7 +64,7 @@ export function createScheduler({ getProfiles, run, now = Date.now, setTimer = s
         if (!p.enabled) { clearTimer(timers.get(p.id)); timers.delete(p.id); nextAt.delete(p.id); continue; }
         if (!running.has(p.id)) {
           const left = nextAt.has(p.id) ? nextAt.get(p.id) - now() : 0;
-          arm(p, Math.min(Math.max(0, left), p.intervalMin * 60_000));
+          arm(p, Math.min(Math.max(0, left), tickMinutes(p) * 60_000));
         }
       }
       emit();

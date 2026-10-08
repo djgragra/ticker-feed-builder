@@ -80,6 +80,7 @@ function sanitizeFeed(raw, ids, folders) {
     folder,
     url: sanitizeUrl(r.url),
     maxItems: clamp(r.maxItems, 1, 100, 10),
+    intervalMin: clamp(r.intervalMin, 0, 1440, 0), // 0 = the profile's interval
     enabled: r.enabled !== false,
     insecureTls: !!r.insecureTls
   };

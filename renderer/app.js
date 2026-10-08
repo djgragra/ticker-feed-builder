@@ -6,6 +6,7 @@ const state = {
   settings: null,
   status: { active: false, profiles: {} },
   sel: null,
+  view: 'dash', // 'dash' | 'profile'
   tab: 'feeds',
   logs: [],
   logFilter: 'all',
@@ -74,11 +75,19 @@ function profileLed(p) {
   return bad === 0 ? 'ok' : bad === res.length ? 'bad' : 'warn';
 }
 
+function dashLed() {
+  const leds = state.settings.profiles.map(profileLed);
+  return leds.includes('bad') ? 'bad' : leds.includes('warn') ? 'warn' : leds.includes('run') ? 'run' : leds.includes('ok') ? 'ok' : '';
+}
+
 function renderRail() {
   const ul = $('#profileList');
+  const dashItem = h('li', { class: 'profile-item' + (state.view === 'dash' ? ' sel' : ''), tabIndex: 0, role: 'button', onclick: () => { state.view = 'dash'; renderRail(); renderMain(); }, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); state.view = 'dash'; renderRail(); renderMain(); } } },
+    h('span', { class: 'led ' + (dashLed()) }), h('div', { class: 'pname', text: t('rail.dashboard') }));
   ul.replaceChildren(
+    dashItem,
     ...state.settings.profiles.map((p) =>
-      h('li', { class: 'profile-item' + (p.id === state.sel ? ' sel' : ''), tabIndex: 0, role: 'button', onclick: () => select(p.id), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(p.id); } } },
+      h('li', { class: 'profile-item' + (state.view === 'profile' && p.id === state.sel ? ' sel' : ''), tabIndex: 0, role: 'button', onclick: () => select(p.id), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(p.id); } } },
         h('span', { class: 'led ' + profileLed(p) }),
         h('div', { class: 'pname' }, p.name, h('div', { class: 'psub' }, `${p.feeds.filter((f) => f.enabled).length}/${p.feeds.length} feeds · ${p.intervalMin} min`))
       )
@@ -108,6 +117,7 @@ function renderTop() {
 
 function select(id) {
   state.sel = id;
+  state.view = 'profile';
   renderRail();
   renderMain();
 }
@@ -115,6 +125,7 @@ function select(id) {
 // ---- main panel ---------------------------------------------------------------------------------
 function renderMain() {
   const main = $('#main');
+  if (state.view === 'dash') return renderDashboard();
   const p = curProfile();
   if (!p) {
     main.replaceChildren(h('div', { class: 'empty' }, h('h2', { text: t('empty.title') }), h('p', { text: t('empty.text') }), h('button', { class: 'btn primary', onclick: openNewDialog, text: t('empty.create') })));
@@ -122,14 +133,15 @@ function renderMain() {
   }
   const change = () => saveProfile(p);
   const pathRow = (labelKey, field, { browse, open: canOpen, clear, hint }) => {
-    const input = h('input', { type: 'text', value: p[field], placeholder: field === 'outputDir' ? t('p.outputPh') : '', spellcheck: false, onchange: (e) => { p[field] = e.target.value.trim(); change(); } });
+    const after = () => { change(); if (field === 'placeholderPath') setTimeout(() => loadPlaceholderPreview(p), 400); };
+    const input = h('input', { type: 'text', value: p[field], placeholder: field === 'outputDir' ? t('p.outputPh') : '', spellcheck: false, onchange: (e) => { p[field] = e.target.value.trim(); after(); } });
     return [
       h('label', { text: t(labelKey) }),
       h('div', {},
         h('div', { class: 'pathbox' }, input,
-          h('button', { class: 'btn', text: t('p.browse'), onclick: async () => { const v = await api.pick[browse](); if (v) { p[field] = v; input.value = v; change(); } } }),
+          h('button', { class: 'btn', text: t('p.browse'), onclick: async () => { const v = await api.pick[browse](); if (v) { p[field] = v; input.value = v; after(); } } }),
           canOpen ? h('button', { class: 'btn', text: t('p.open'), onclick: async () => { const r = await api.profiles.openOutput(p.id); if (r !== 'ok') alert(r === 'no-folder' ? t('p.noOutput') : t('err.openFolder')); } }) : null,
-          clear ? h('button', { class: 'btn', text: t('p.clear'), onclick: () => { p[field] = ''; input.value = ''; change(); } }) : null),
+          clear ? h('button', { class: 'btn', text: t('p.clear'), onclick: () => { p[field] = ''; input.value = ''; after(); } }) : null),
         hint ? h('div', { class: 'hint', text: hint }) : null)
     ];
   };
@@ -141,17 +153,27 @@ function renderMain() {
         h('div', { class: 'next', id: 'nextRun' })),
       h('div', { class: 'pactions' },
         h('button', { class: 'btn primary', id: 'btnRun', text: t('p.runNow'), onclick: () => api.profiles.runNow(p.id) }),
-        h('button', { class: 'btn danger', text: t('p.delete'), onclick: async () => { if (await confirmDlg(t('p.deleteTitle'), t('p.deleteText'), t('common.delete'))) { await api.profiles.remove(p.id); state.settings.profiles = state.settings.profiles.filter((x) => x.id !== p.id); state.sel = state.settings.profiles[0]?.id || null; renderRail(); renderMain(); } } }))),
+        h('button', { class: 'btn danger', text: t('p.delete'), onclick: async () => { if (await confirmDlg(t('p.deleteTitle'), t('p.deleteText'), t('common.delete'))) { await api.profiles.remove(p.id); state.settings.profiles = state.settings.profiles.filter((x) => x.id !== p.id); state.sel = state.settings.profiles[0]?.id || null; state.view = 'dash'; renderRail(); renderMain(); } } }))),
     h('div', { class: 'prow' },
       h('label', { text: t('p.enabled') }),
       h('div', { class: 'check' }, h('input', { type: 'checkbox', checked: p.enabled, onchange: (e) => { p.enabled = e.target.checked; change(); } }),
         h('span', { text: t('p.interval') }), h('input', { type: 'number', min: 1, max: 1440, value: p.intervalMin, onchange: (e) => { p.intervalMin = Number(e.target.value); change(); } }), h('span', { text: t('p.minutes') })),
+      h('span', {}), h('div', { class: 'hint', text: t('p.intervalHint') }),
       ...pathRow('p.output', 'outputDir', { browse: 'folder', open: true }),
-      ...pathRow('p.placeholder', 'placeholderPath', { browse: 'image', clear: true, hint: t('p.placeholderHint') })),
+      ...pathRow('p.placeholder', 'placeholderPath', { browse: 'image', clear: true, hint: t('p.placeholderHint') }),
+      h('span', {}), h('div', { class: 'phprev' }, h('span', { class: 'hint', text: t('p.phPreview') }), h('img', { id: 'phThumb', alt: '', width: 240, height: 135, hidden: true }))),
     h('div', { class: 'tabs', role: 'tablist' }, ...['feeds', 'format', 'log'].map((k) => h('button', { class: 'tab' + (state.tab === k ? ' sel' : ''), role: 'tab', text: t('tab.' + k), onclick: () => { state.tab = k; renderMain(); } }))),
     state.tab === 'feeds' ? feedsTab(p, change) : state.tab === 'format' ? formatTab(p, change) : logTab()
   );
   refreshDynamic();
+  loadPlaceholderPreview(p);
+}
+
+async function loadPlaceholderPreview(p) {
+  const img = $('#phThumb');
+  if (!img) return;
+  const url = await api.placeholderPreview(p.placeholderPath);
+  if (url && $('#phThumb') === img) { img.src = url; img.hidden = false; }
 }
 
 // ---- feeds tab ----------------------------------------------------------------------------------
@@ -162,6 +184,7 @@ function feedsTab(p, change) {
       h('td', {}, h('input', { type: 'text', value: f.folder, maxLength: 100, 'aria-label': t('f.folder'), onchange: (e) => { f.folder = e.target.value; change(); } })),
       h('td', { class: 'url' }, h('input', { type: 'url', value: f.url, spellcheck: false, placeholder: 'https://…', 'aria-label': t('f.url'), onchange: (e) => { f.url = e.target.value.trim(); change(); } })),
       h('td', {}, h('input', { type: 'number', min: 1, max: 100, value: f.maxItems, 'aria-label': t('f.max'), onchange: (e) => { f.maxItems = Number(e.target.value); change(); } })),
+      h('td', {}, h('input', { type: 'number', min: 0, max: 1440, value: f.intervalMin || '', placeholder: String(p.intervalMin), title: t('f.everyHint'), 'aria-label': t('f.every'), onchange: (e) => { f.intervalMin = Number(e.target.value) || 0; change(); } })),
       h('td', {}, h('input', { type: 'checkbox', checked: f.insecureTls, 'aria-label': t('f.tls'), title: t('f.tlsHint'), onchange: (e) => { f.insecureTls = e.target.checked; change(); } })),
       h('td', { class: 'st', 'data-feed': f.id }),
       h('td', {}, h('div', { class: 'row-actions' },
@@ -172,11 +195,11 @@ function feedsTab(p, change) {
   return h('div', {},
     p.feeds.length
       ? h('table', { class: 'feeds' },
-          h('thead', {}, h('tr', {}, ...['f.on', 'f.folder', 'f.url', 'f.max', 'f.tls', 'f.status', ''].map((k) => h('th', { text: k ? t(k) : '', title: k === 'f.tls' ? t('f.tlsHint') : undefined })))),
+          h('thead', {}, h('tr', {}, ...['f.on', 'f.folder', 'f.url', 'f.max', 'f.every', 'f.tls', 'f.status', ''].map((k) => h('th', { text: k ? t(k) : '', title: k === 'f.tls' ? t('f.tlsHint') : k === 'f.every' ? t('f.everyHint') : undefined })))),
           h('tbody', {}, rows))
       : h('p', { class: 'hint', text: t('f.none') }),
     h('div', { class: 'toolbar' },
-      h('button', { class: 'btn', text: t('f.add'), onclick: () => { p.feeds.push({ id: crypto.randomUUID(), folder: `Feed${p.feeds.length + 1}`, url: '', maxItems: 10, enabled: true, insecureTls: false }); change(); renderMain(); } })),
+      h('button', { class: 'btn', text: t('f.add'), onclick: () => { p.feeds.push({ id: crypto.randomUUID(), folder: `Feed${p.feeds.length + 1}`, url: '', maxItems: 10, intervalMin: 0, enabled: true, insecureTls: false }); change(); renderMain(); } })),
     h('p', { class: 'hint', text: t('f.duplicate') })
   );
 }
@@ -185,14 +208,14 @@ async function testFeed(f) {
   const body = $('#testBody');
   body.replaceChildren(h('p', { text: t('test.loading') }));
   $('#dlgTest').showModal();
-  const r = await api.feed.test({ url: f.url, insecureTls: f.insecureTls });
+  const r = await api.feed.test({ url: f.url, insecureTls: f.insecureTls }, state.sel);
   if (!r.ok) return body.replaceChildren(h('p', { class: 'badge bad', text: t('test.failed', { e: r.error }) }));
   body.replaceChildren(
     h('p', { class: 'hint', text: t('test.total', { n: r.total, m: r.items.length }) }),
     h('div', { class: 'tgrid' }, r.items.map((it) =>
       h('div', { class: 'tcard' },
         h('div', { class: 'thumb' }, it.thumb ? h('img', { src: it.thumb, alt: '' }) : t('test.noImage')),
-        h('div', { class: 'tb' }, h('div', { class: 'tt', text: it.title || '—' }), h('div', { class: 'td', text: it.description || '—' })))))
+        h('div', { class: 'tb' }, h('div', { class: 'tt', text: it.title || '—' }), h('div', { class: 'td', text: it.description || '—' }), it.hasImage ? null : h('span', { class: 'badge', text: it.imageFailed ? t('test.imgFailed') : t('test.noImage') })))))
   );
 }
 
@@ -258,31 +281,106 @@ function logTab() {
 }
 
 // ---- live status (feed cells, countdown) -----------------------------------------------------------
+function feedStatusNodes(r, feed) {
+  if (!r) return [h('span', { class: 'time', text: feed && !feed.url ? t('f.noUrl') : t('f.never') })];
+  if (!r.ok) return [h('span', { class: 'led bad' }), ' ', h('span', { class: 'bad-text', text: r.error }), ' ', h('span', { class: 'time', text: fmtTime(r.at) })];
+  const text = r.unchanged ? t('f.unchanged', { items: r.items }) : t('f.stat', { items: r.items, img: r.imagesOriginal, ph: r.placeholders });
+  return [h('span', { class: 'led ok' }), ' ', text, ' ', h('span', { class: 'time', text: fmtTime(r.at) })];
+}
+
 function refreshDynamic() {
-  const p = curProfile();
   renderRail();
+  if (state.view === 'dash') return renderDashboard();
+  const p = curProfile();
   if (!p) return;
   const st = state.status.profiles[p.id] || {};
   for (const td of document.querySelectorAll('td.st')) {
-    const r = st.feeds?.[td.getAttribute('data-feed')];
-    const feed = p.feeds.find((f) => f.id === td.getAttribute('data-feed'));
-    if (!r) td.replaceChildren(h('span', { class: 'time', text: feed && !feed.url ? t('f.noUrl') : t('f.never') }));
-    else if (r.ok) td.replaceChildren(h('span', { class: 'led ok' }), ' ', t('f.stat', { items: r.items, img: r.imagesOriginal, ph: r.placeholders }), ' ', h('span', { class: 'time', text: fmtTime(r.at) }));
-    else td.replaceChildren(h('span', { class: 'led bad' }), ' ', h('span', { class: 'bad-text', text: r.error }), ' ', h('span', { class: 'time', text: fmtTime(r.at) }));
+    const id = td.getAttribute('data-feed');
+    td.replaceChildren(...feedStatusNodes(st.feeds?.[id], p.feeds.find((f) => f.id === id)));
   }
   tickCountdown();
   const run = $('#btnRun');
   if (run) run.disabled = !!st.running;
 }
 
+function nextText(st) {
+  return st?.running ? t('p.running') : st?.nextRunAt ? t('p.nextIn', { t: mmss(st.nextRunAt - Date.now()) }) : t('p.notScheduled');
+}
+
 function tickCountdown() {
-  const el = $('#nextRun');
+  for (const el of document.querySelectorAll('[data-next]')) el.textContent = nextText(state.status.profiles[el.getAttribute('data-next')]);
   const p = curProfile();
-  if (!el || !p) return;
-  const st = state.status.profiles[p.id] || {};
-  el.textContent = st.running ? t('p.running') : st.nextRunAt ? t('p.nextIn', { t: mmss(st.nextRunAt - Date.now()) }) : t('p.notScheduled');
+  const el = $('#nextRun');
+  if (el && p) el.textContent = nextText(state.status.profiles[p.id]);
+  const soon = $('#dashSoonest');
+  if (soon) {
+    const times = state.settings.profiles.map((x) => state.status.profiles[x.id]?.nextRunAt).filter(Boolean);
+    soon.textContent = state.status.active && times.length ? mmss(Math.min(...times) - Date.now()) : '—';
+  }
 }
 setInterval(tickCountdown, 1000);
+
+// ---- dashboard ---------------------------------------------------------------------------------------
+function renderDashboard() {
+  const main = $('#main');
+  const profiles = state.settings.profiles;
+  if (!profiles.length) {
+    main.replaceChildren(h('div', { class: 'empty' }, h('h2', { text: t('empty.title') }), h('p', { text: t('empty.text') }), h('button', { class: 'btn primary', onclick: openNewDialog, text: t('empty.create') })));
+    return;
+  }
+  let ok = 0, bad = 0, lastChange = 0;
+  for (const p of profiles) {
+    if (!p.enabled) continue;
+    for (const f of p.feeds.filter((x) => x.enabled)) {
+      const r = state.status.profiles[p.id]?.feeds?.[f.id];
+      if (!r) continue;
+      r.ok ? ok++ : bad++;
+      if (r.changedAt) lastChange = Math.max(lastChange, r.changedAt);
+    }
+  }
+  const tile = (label, value, cls, extra) => h('div', { class: 'tile ' + (cls || '') }, h('div', { class: 'tile-label', text: label }), h('div', { class: 'tile-value' }, value), extra || null);
+
+  const card = (p) => {
+    const st = state.status.profiles[p.id] || { feeds: {} };
+    const dirDown = Object.values(st.feeds || {}).some((r) => r.code === 'output-missing');
+    const rows = p.feeds.filter((f) => f.enabled).map((f) => {
+      const r = st.feeds?.[f.id];
+      return h('tr', {},
+        h('td', {}, h('span', { class: 'led ' + (!r ? '' : r.ok ? 'ok' : 'bad') }), ' ', f.folder),
+        h('td', { class: 'st' }, ...(r ? (r.ok ? [r.unchanged ? t('f.unchanged', { items: r.items }) : t('f.stat', { items: r.items, img: r.imagesOriginal, ph: r.placeholders })] : [h('span', { class: 'bad-text', text: r.error })]) : [h('span', { class: 'time', text: t('dash.pending') })])),
+        h('td', { class: 'time', text: r ? fmtTime(r.at) : '—' }),
+        h('td', { class: 'time', text: r?.changedAt ? fmtTime(r.changedAt) : '—' }));
+    });
+    return h('section', { class: 'dcard' },
+      h('div', { class: 'dcard-head' },
+        h('span', { class: 'led ' + profileLed(p) }),
+        h('h3', { text: p.name }), p.enabled ? null : h('span', { class: 'badge', text: t('dash.disabled') }),
+        h('span', { class: 'next', 'data-next': p.id }),
+        h('div', { class: 'dcard-actions' },
+          h('button', { class: 'btn small', text: t('p.runNow'), disabled: !!st.running, onclick: () => api.profiles.runNow(p.id) }),
+          h('button', { class: 'btn small', text: t('p.open'), onclick: () => api.profiles.openOutput(p.id) }),
+          h('button', { class: 'btn small', text: t('dash.edit'), onclick: () => select(p.id) }))),
+      h('div', { class: 'path', text: p.outputDir || t('p.outputPh') }),
+      dirDown ? h('div', { class: 'alert-line', text: t('dash.dirMissing') }) : null,
+      rows.length
+        ? h('table', { class: 'feeds dtable' }, h('thead', {}, h('tr', {}, ...['dash.feed', 'dash.status', 'dash.checked', 'dash.updated'].map((k) => h('th', { text: t(k) })))), h('tbody', {}, rows))
+        : h('p', { class: 'hint', text: t('dash.noFeeds') }));
+  };
+
+  const problems = state.logs.filter((e) => e.level !== 'info').slice(-10).reverse();
+  main.replaceChildren(
+    h('div', { class: 'tiles' },
+      tile(t('dash.schedules'), h('span', {}, h('span', { class: 'led ' + (state.status.active ? 'ok' : 'warn') }), ' ', state.status.active ? t('top.running') : t('top.paused')), '', h('button', { class: 'btn small', text: state.status.active ? t('top.pause') : t('top.resume'), onclick: async () => { state.status = await api.scheduler.setPaused(state.status.active); refreshDynamic(); } })),
+      tile(t('dash.feedsOk'), String(ok), ok ? 'good' : ''),
+      tile(t('dash.problems'), String(bad), bad ? 'bad' : ''),
+      tile(t('dash.nextCheck'), h('span', { id: 'dashSoonest', text: '—' })),
+      tile(t('dash.lastChange'), lastChange ? fmtTime(lastChange) : t('dash.notYet'))),
+    h('div', { class: 'dgrid' }, profiles.map(card)),
+    h('section', { class: 'dcard' },
+      h('div', { class: 'dcard-head' }, h('h3', { text: t('dash.recent') })),
+      problems.length ? h('div', { class: 'log short' }, problems.map(logLine)) : h('p', { class: 'hint', text: t('dash.noProblems') })));
+  tickCountdown();
+}
 
 // ---- dialogs ------------------------------------------------------------------------------------
 function confirmDlg(title, text, okLabel) {
@@ -340,7 +438,7 @@ function renderSettings() {
     h('div', { class: 'sec' }, h('h3', { text: t('s.backup') }),
       h('div', { class: 'toolbar' },
         h('button', { class: 'btn', text: t('s.export'), onclick: async () => { const r = await api.settings.export(); if (r.ok) msgBox.textContent = t('s.exported', { f: r.file }); } }),
-        h('button', { class: 'btn', text: t('s.import'), onclick: async () => { const r = await api.settings.import(); if (r.ok) { state.settings = r.settings; state.sel = state.settings.profiles[0]?.id || null; applyLang(); msgBox.textContent = t('s.importOk'); } else if (r.error) msgBox.textContent = r.error; } })),
+        h('button', { class: 'btn', text: t('s.import'), onclick: async () => { const r = await api.settings.import(); if (r.ok) { state.settings = r.settings; state.sel = state.settings.profiles[0]?.id || null; state.view = 'dash'; applyLang(); msgBox.textContent = t('s.importOk'); } else if (r.error) msgBox.textContent = r.error; } })),
       h('p', { class: 'hint', text: t('s.backupNote') })),
     h('div', { class: 'sec' }, h('h3', { text: t('s.updates') }),
       gen('checkUpdates', 's.checkUpdates'),
