@@ -37,9 +37,11 @@ function h(tag, attrs, ...kids) {
 
 const curProfile = () => state.settings.profiles.find((p) => p.id === state.sel) || null;
 const fmtTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const fmtDateTime = (ms) => new Date(ms).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' });
 const mmss = (ms) => {
-  const s = Math.max(0, Math.round(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const sec = Math.max(0, Math.round(ms / 1000));
+  const hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60), ss = sec % 60;
+  return hh ? `${hh}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}` : `${mm}:${String(ss).padStart(2, '0')}`;
 };
 
 // ---- saving ---------------------------------------------------------------------------------------
@@ -82,18 +84,63 @@ function dashLed() {
 
 function renderRail() {
   const ul = $('#profileList');
-  const dashItem = h('li', { class: 'profile-item' + (state.view === 'dash' ? ' sel' : ''), tabIndex: 0, role: 'button', onclick: () => { state.view = 'dash'; renderRail(); renderMain(); }, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); state.view = 'dash'; renderRail(); renderMain(); } } },
-    h('span', { class: 'led ' + (dashLed()) }), h('div', { class: 'pname', text: t('rail.dashboard') }));
+  const list = state.settings.profiles;
+  $('#btnDash').classList.toggle('sel', state.view === 'dash');
+  $('#dashLed').className = 'led ' + dashLed();
   ul.replaceChildren(
-    dashItem,
-    ...state.settings.profiles.map((p) =>
-      h('li', { class: 'profile-item' + (state.view === 'profile' && p.id === state.sel ? ' sel' : ''), tabIndex: 0, role: 'button', onclick: () => select(p.id), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(p.id); } } },
+    ...list.map((p, i) => {
+      const go = () => select(p.id);
+      return h('li', {
+          class: 'profile-item' + (state.view === 'profile' && p.id === state.sel ? ' sel' : ''), tabIndex: 0, role: 'button', draggable: true, 'data-id': p.id,
+          onclick: go,
+          onkeydown: (e) => {
+            if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); moveProfile(p.id, e.key === 'ArrowUp' ? -1 : 1); return; }
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+          },
+          ondragstart: (e) => { e.dataTransfer.setData('text/plain', p.id); e.dataTransfer.effectAllowed = 'move'; e.currentTarget.classList.add('dragging'); },
+          ondragend: (e) => { e.currentTarget.classList.remove('dragging'); clearDropMarks(); },
+          ondragover: (e) => { e.preventDefault(); clearDropMarks(); e.currentTarget.classList.add(dropBefore(e) ? 'drop-before' : 'drop-after'); },
+          ondrop: (e) => { e.preventDefault(); const from = e.dataTransfer.getData('text/plain'); const before = dropBefore(e); clearDropMarks(); dropProfile(from, p.id, before); }
+        },
         h('span', { class: 'led ' + profileLed(p) }),
-        h('div', { class: 'pname' }, p.name, h('div', { class: 'psub' }, `${p.feeds.filter((f) => f.enabled).length}/${p.feeds.length} feeds · ${p.intervalMin} min`))
-      )
-    )
+        h('div', { class: 'pname' }, p.name, h('div', { class: 'psub' }, `${p.feeds.filter((f) => f.enabled).length}/${p.feeds.length} feeds · ${p.intervalMin} min`)),
+        h('div', { class: 'mv' },
+          h('button', { class: 'mvb', title: t('rail.up'), 'aria-label': t('rail.up'), disabled: i === 0, onclick: (e) => { e.stopPropagation(); moveProfile(p.id, -1); } }, '▲'),
+          h('button', { class: 'mvb', title: t('rail.down'), 'aria-label': t('rail.down'), disabled: i === list.length - 1, onclick: (e) => { e.stopPropagation(); moveProfile(p.id, 1); } }, '▼')));
+    })
   );
   renderTop();
+}
+
+const dropBefore = (e) => e.offsetY < e.currentTarget.clientHeight / 2;
+const clearDropMarks = () => document.querySelectorAll('.drop-before, .drop-after').forEach((el) => el.classList.remove('drop-before', 'drop-after'));
+
+// The order of this list is also the order of the dashboard; it is saved with the settings.
+async function setOrder(ids) {
+  const byId = new Map(state.settings.profiles.map((p) => [p.id, p]));
+  state.settings.profiles = ids.map((id) => byId.get(id)).filter(Boolean);
+  renderRail();
+  if (state.view === 'dash') renderDashboard();
+  await api.profiles.reorder(ids);
+}
+function moveProfile(id, delta) {
+  const ids = state.settings.profiles.map((p) => p.id);
+  const i = ids.indexOf(id), j = i + delta;
+  if (i < 0 || j < 0 || j >= ids.length) return;
+  [ids[i], ids[j]] = [ids[j], ids[i]];
+  setOrder(ids).then(() => { const el = document.querySelector(`.profile-item[data-id="${id}"]`); el?.focus(); });
+}
+function dropProfile(fromId, toId, before) {
+  if (!fromId || fromId === toId) return;
+  const ids = state.settings.profiles.map((p) => p.id).filter((x) => x !== fromId);
+  const k = ids.indexOf(toId);
+  if (k < 0) return;
+  ids.splice(before ? k : k + 1, 0, fromId);
+  setOrder(ids);
+}
+function sortProfilesAz() {
+  const ids = [...state.settings.profiles].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })).map((p) => p.id);
+  setOrder(ids);
 }
 
 function renderTop() {
@@ -284,9 +331,9 @@ function logTab() {
 // ---- live status (feed cells, countdown) -----------------------------------------------------------
 function feedStatusNodes(r, feed) {
   if (!r) return [h('span', { class: 'time', text: feed && !feed.url ? t('f.noUrl') : t('f.never') })];
-  if (!r.ok) return [h('span', { class: 'led bad' }), ' ', h('span', { class: 'bad-text', text: r.error }), ' ', h('span', { class: 'time', text: fmtTime(r.at) })];
+  if (!r.ok) return [h('span', { class: 'led bad' }), ' ', h('span', { class: 'bad-text', text: r.error }), ' ', h('span', { class: 'time', text: fmtDateTime(r.at) })];
   const text = r.unchanged ? t('f.unchanged', { items: r.items }) : t('f.stat', { items: r.items, img: r.imagesOriginal, ph: r.placeholders });
-  return [h('span', { class: 'led ok' }), ' ', text, ' ', h('span', { class: 'time', text: fmtTime(r.at) })];
+  return [h('span', { class: 'led ok' }), ' ', text, ' ', h('span', { class: 'time', text: fmtDateTime(r.at) })];
 }
 
 function refreshDynamic() {
@@ -310,18 +357,46 @@ function nextText(st) {
 
 function tickCountdown() {
   for (const el of document.querySelectorAll('[data-next]')) el.textContent = nextText(state.status.profiles[el.getAttribute('data-next')]);
+  for (const el of document.querySelectorAll('[data-until]')) {
+    const ms = Number(el.getAttribute('data-until')) - Date.now();
+    el.textContent = ms > 0 ? mmss(ms) : t('dash.now');
+  }
+  const clock = $('#dashClock');
+  if (clock) clock.textContent = new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'medium' });
   const p = curProfile();
   const el = $('#nextRun');
   if (el && p) el.textContent = nextText(state.status.profiles[p.id]);
-  const soon = $('#dashSoonest');
-  if (soon) {
-    const times = state.settings.profiles.map((x) => state.status.profiles[x.id]?.nextRunAt).filter(Boolean);
-    soon.textContent = state.status.active && times.length ? mmss(Math.min(...times) - Date.now()) : '—';
-  }
 }
 setInterval(tickCountdown, 1000);
 
 // ---- dashboard ---------------------------------------------------------------------------------------
+// The profile wakes up as often as its most frequent feed needs (same rule as the scheduler in the main process).
+const tickMs = (p) => Math.min(p.intervalMin, ...p.feeds.filter((f) => f.enabled && f.intervalMin > 0).map((f) => f.intervalMin)) * 60_000;
+
+// What will be checked, and when, in time order. A feed is due `every` after its last check; it is then
+// checked at the first wake-up of its profile that is not earlier than that.
+function upcomingChecks() {
+  const out = [];
+  const active = state.status.active;
+  for (const p of state.settings.profiles) {
+    if (!p.enabled) continue;
+    const st = state.status.profiles[p.id] || {};
+    const tick = tickMs(p);
+    for (const f of p.feeds.filter((x) => x.enabled)) {
+      const r = st.feeds?.[f.id];
+      let when = null;
+      if (st.running) when = 'running';
+      else if (active && st.nextRunAt) {
+        const due = r ? r.at + (f.intervalMin || p.intervalMin) * 60_000 - 5000 : 0;
+        when = st.nextRunAt;
+        while (when < due) when += tick;
+      }
+      out.push({ p, f, when });
+    }
+  }
+  return out.sort((a, b) => (typeof a.when === 'number' ? a.when : Infinity) - (typeof b.when === 'number' ? b.when : Infinity));
+}
+
 function renderDashboard() {
   const main = $('#main');
   const profiles = state.settings.profiles;
@@ -339,6 +414,8 @@ function renderDashboard() {
       if (r.changedAt) lastChange = Math.max(lastChange, r.changedAt);
     }
   }
+  const up = upcomingChecks();
+  const first = up.find((u) => typeof u.when === 'number');
   const tile = (label, value, cls, extra) => h('div', { class: 'tile ' + (cls || '') }, h('div', { class: 'tile-label', text: label }), h('div', { class: 'tile-value' }, value), extra || null);
 
   const card = (p) => {
@@ -349,8 +426,8 @@ function renderDashboard() {
       return h('tr', {},
         h('td', {}, h('span', { class: 'led ' + (!r ? '' : r.ok ? 'ok' : 'bad') }), ' ', f.folder),
         h('td', { class: 'st' }, ...(r ? (r.ok ? [r.unchanged ? t('f.unchanged', { items: r.items }) : t('f.stat', { items: r.items, img: r.imagesOriginal, ph: r.placeholders })] : [h('span', { class: 'bad-text', text: r.error })]) : [h('span', { class: 'time', text: t('dash.pending') })])),
-        h('td', { class: 'time', text: r ? fmtTime(r.at) : '—' }),
-        h('td', { class: 'time', text: r?.changedAt ? fmtTime(r.changedAt) : '—' }));
+        h('td', { class: 'time', text: r ? fmtDateTime(r.at) : '—' }),
+        h('td', { class: 'time', text: r?.changedAt ? fmtDateTime(r.changedAt) : '—' }));
     });
     return h('section', { class: 'dcard' },
       h('div', { class: 'dcard-head' },
@@ -368,14 +445,27 @@ function renderDashboard() {
         : h('p', { class: 'hint', text: t('dash.noFeeds') }));
   };
 
+  const whenCells = (u) => {
+    if (u.when === 'running') return [h('td', { class: 'time', text: '—' }), h('td', { text: t('dash.runningNow') })];
+    if (u.when === null) return [h('td', { class: 'time', text: '—' }), h('td', { text: t('dash.pausedShort') })];
+    return [h('td', { class: 'time', text: fmtDateTime(u.when) }), h('td', { class: 'time', 'data-until': String(u.when) })];
+  };
   const problems = state.logs.filter((e) => e.level !== 'info').slice(-10).reverse();
   main.replaceChildren(
     h('div', { class: 'tiles' },
+      tile(t('dash.now'), h('span', { id: 'dashClock', class: 'clock' })),
       tile(t('dash.schedules'), h('span', {}, h('span', { class: 'led ' + (state.status.active ? 'ok' : 'warn') }), ' ', state.status.active ? t('top.running') : t('top.paused')), '', h('button', { class: 'btn small', text: state.status.active ? t('top.pause') : t('top.resume'), onclick: async () => { state.status = await api.scheduler.setPaused(state.status.active); refreshDynamic(); } })),
       tile(t('dash.feedsOk'), String(ok), ok ? 'good' : ''),
       tile(t('dash.problems'), String(bad), bad ? 'bad' : ''),
-      tile(t('dash.nextCheck'), h('span', { id: 'dashSoonest', text: '—' })),
-      tile(t('dash.lastChange'), lastChange ? fmtTime(lastChange) : t('dash.notYet'))),
+      tile(t('dash.nextCheck'), first ? h('span', { 'data-until': String(first.when) }) : '—', '', first ? h('div', { class: 'tile-sub', text: t('dash.nextWhat', { p: first.p.name, f: first.f.folder }) }) : null),
+      tile(t('dash.lastChange'), lastChange ? fmtDateTime(lastChange) : t('dash.notYet'), 'small')),
+    h('section', { class: 'dcard' },
+      h('div', { class: 'dcard-head' }, h('h3', { text: t('dash.upcoming') })),
+      up.length
+        ? h('div', { class: 'scroll' }, h('table', { class: 'feeds dtable' },
+            h('thead', {}, h('tr', {}, ...['dash.when', 'dash.in', 'dash.profile', 'dash.feed'].map((k) => h('th', { text: t(k) })))),
+            h('tbody', {}, up.map((u) => h('tr', {}, ...whenCells(u), h('td', { text: u.p.name }), h('td', { text: u.f.folder }))))))
+        : h('p', { class: 'hint', text: t('dash.nothingScheduled') })),
     h('div', { class: 'dgrid' }, profiles.map(card)),
     h('section', { class: 'dcard' },
       h('div', { class: 'dcard-head' }, h('h3', { text: t('dash.recent') })),
@@ -416,6 +506,7 @@ function renderSettings() {
   const g = s.general;
   const n = s.notifications;
   const tg = n.telegram;
+  const em = n.email;
   const gen = (key, label) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: g[key], onchange: async (e) => { await patchSettings({ general: { [key]: e.target.checked } }); } }), h('span', { text: t(label) }));
   const msgBox = h('div', { class: 'hint', id: 'setMsg' });
   const tokenInput = h('input', { type: 'password', value: tg.botToken, autocomplete: 'off', spellcheck: false, onchange: (e) => patchSettings({ notifications: { telegram: { botToken: e.target.value } } }) });
@@ -423,6 +514,16 @@ function renderSettings() {
     const recipients = e.target.value.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const i = l.search(/\s/); return i < 0 ? { chatId: l, note: '' } : { chatId: l.slice(0, i), note: l.slice(i).trim() }; });
     patchSettings({ notifications: { telegram: { recipients } } });
   } });
+  const emailText = (key, ph) => h('input', { type: 'text', value: em[key], placeholder: ph, spellcheck: false, onchange: (e) => patchSettings({ notifications: { email: { [key]: e.target.value } } }) });
+  const emailNum = (key) => h('input', { type: 'number', min: 1, max: 65535, value: em[key], onchange: (e) => patchSettings({ notifications: { email: { [key]: Number(e.target.value) } } }) });
+  const emailPass = h('input', { type: 'password', value: em.pass, autocomplete: 'off', spellcheck: false, onchange: (e) => patchSettings({ notifications: { email: { pass: e.target.value } } }) });
+  const emailTo = h('textarea', { rows: 4, spellcheck: false, value: em.recipients.join('\n'), onchange: () => saveEmailRecipients() });
+  const saveEmailRecipients = async () => {
+    const typed = emailTo.value.split(/[\s,;]+/).filter(Boolean);
+    const next = await patchSettings({ notifications: { email: { recipients: typed } } });
+    emailTo.value = next.notifications.email.recipients.join('\n'); // show what was kept
+    if (next.notifications.email.recipients.length < new Set(typed.map((x) => x.toLowerCase())).size) msgBox.textContent = t('s.emailDropped');
+  };
   $('#settingsBody').replaceChildren(
     h('div', { class: 'sec' }, h('h3', { text: t('s.general') }),
       gen('startOnBoot', 's.startOnBoot'), gen('startMinimized', 's.startMinimized'), gen('runOnLaunch', 's.runOnLaunch'), gen('keepAwake', 's.keepAwake'),
@@ -435,7 +536,18 @@ function renderSettings() {
       h('label', { class: 'field' }, h('span', { text: t('s.tgToken') }), tokenInput),
       h('label', { class: 'field' }, h('span', { text: t('s.tgChats') }), chats),
       h('p', { class: 'hint', text: t('s.tgNote') }),
-      h('button', { class: 'btn', text: t('s.tgTest'), onclick: async () => { await patchSettings({ notifications: { telegram: { botToken: tokenInput.value } } }); const r = await api.telegram.test({ botToken: tokenInput.value, recipients: state.settings.notifications.telegram.recipients }); msgBox.textContent = r.ok ? t('s.tgOk') : r.error; } })),
+      h('button', { class: 'btn', text: t('s.tgTest'), onclick: async () => { await patchSettings({ notifications: { telegram: { botToken: tokenInput.value } } }); const r = await api.telegram.test({ botToken: tokenInput.value, recipients: state.settings.notifications.telegram.recipients }); msgBox.textContent = r.ok ? t('s.tgOk') : r.error; } }),
+      h('hr', {}),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: em.enabled, onchange: (e) => patchSettings({ notifications: { email: { enabled: e.target.checked } } }) }), h('span', { text: t('s.emailEnable') })),
+      h('div', { class: 'form' },
+        h('label', { text: t('s.emailHost') }), h('div', { class: 'inline' }, emailText('host', 'smtp.example.com'), h('span', { text: t('s.emailPort') }), emailNum('port')),
+        h('label', { text: '' }), h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: em.secure, onchange: (e) => patchSettings({ notifications: { email: { secure: e.target.checked } } }) }), h('span', { text: t('s.emailSecure') })),
+        h('label', { text: t('s.emailUser') }), emailText('user', ''),
+        h('label', { text: t('s.emailPass') }), emailPass,
+        h('label', { text: t('s.emailFrom') }), emailText('from', 'alerts@example.com'),
+        h('label', { text: t('s.emailTo') }), emailTo),
+      h('p', { class: 'hint', text: t('s.emailNote') }),
+      h('button', { class: 'btn', text: t('s.emailTest'), onclick: async () => { await saveEmailRecipients(); const c = state.settings.notifications.email; const r = await api.email.test({ ...c, pass: emailPass.value }); msgBox.textContent = r.ok ? t('s.emailOk') : r.error; } })),
     h('div', { class: 'sec' }, h('h3', { text: t('s.backup') }),
       h('div', { class: 'toolbar' },
         h('button', { class: 'btn', text: t('s.export'), onclick: async () => { const r = await api.settings.export(); if (r.ok) msgBox.textContent = t('s.exported', { f: r.file }); } }),
@@ -473,9 +585,18 @@ $('#updateDownload').onclick = async () => {
 };
 
 // ---- wiring -----------------------------------------------------------------------------------------
+const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+function applyTheme() {
+  const th = state.settings.theme;
+  document.documentElement.dataset.theme = th === 'auto' ? (darkQuery.matches ? 'dark' : 'light') : th;
+  $('#theme').value = th;
+}
+darkQuery.addEventListener('change', () => state.settings && state.settings.theme === 'auto' && applyTheme());
+
 function applyLang() {
   I18N.apply(state.settings.language);
   $('#lang').value = state.settings.language;
+  applyTheme();
   renderHelp();
   renderRail();
   renderMain();
@@ -487,6 +608,9 @@ $('#btnHelp').onclick = () => $('#dlgHelp').showModal();
 $('#btnSettings').onclick = () => { renderSettings(); $('#dlgSettings').showModal(); };
 $('#btnNewProfile').onclick = openNewDialog;
 $('#btnPause').onclick = async () => { state.status = await api.scheduler.setPaused(state.status.active); refreshDynamic(); };
+$('#btnDash').onclick = () => { state.view = 'dash'; renderRail(); renderMain(); };
+$('#btnSortAz').onclick = sortProfilesAz;
+$('#theme').onchange = async (e) => { await patchSettings({ theme: e.target.value }); applyTheme(); };
 $('#lang').onchange = async (e) => { await patchSettings({ language: e.target.value }); applyLang(); };
 $('#newCreate').onclick = async () => {
   const p = await api.profiles.create($('#newName').value.trim() || t('new.defaultName'), $('#newStarter').checked);

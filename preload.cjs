@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('api', {
     save: (profile) => ipcRenderer.invoke('profile:save', profile),
     create: (name, starter) => ipcRenderer.invoke('profile:create', name, starter),
     remove: (id) => ipcRenderer.invoke('profile:delete', id),
+    reorder: (ids) => ipcRenderer.invoke('profile:reorder', ids),
     runNow: (id) => ipcRenderer.invoke('profile:run', id),
     openOutput: (id) => ipcRenderer.invoke('profile:open-output', id)
   },
@@ -31,6 +32,7 @@ contextBridge.exposeInMainWorld('api', {
   pick: { folder: () => ipcRenderer.invoke('pick:folder'), image: () => ipcRenderer.invoke('pick:image') },
   logs: { get: () => ipcRenderer.invoke('logs:get'), openFolder: () => ipcRenderer.invoke('logs:open-folder') },
   telegram: { test: (cfg) => ipcRenderer.invoke('telegram:test', cfg) },
+  email: { test: (cfg) => ipcRenderer.invoke('email:test', cfg) },
   update: {
     check: () => ipcRenderer.invoke('update:check'),
     download: () => ipcRenderer.invoke('update:download'),

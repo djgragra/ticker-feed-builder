@@ -13,6 +13,7 @@
     <div class="top-status" id="topStatus"></div>
     <div class="top-actions">
       <button class="btn" id="btnPause"></button>
+      <select id="theme" aria-label="Theme"><option value="dark" data-i18n="theme.dark">Dark</option><option value="light" data-i18n="theme.light">Light</option><option value="auto" data-i18n="theme.auto">Auto</option></select>
       <select id="lang" aria-label="Language"><option value="en">English</option><option value="it">Italiano</option><option value="es">Español</option></select>
       <button class="btn" id="btnHelp" data-i18n="help.open"></button>
       <button class="btn" id="btnSettings" data-i18n="settings.open"></button>
@@ -28,7 +29,8 @@
 
   <div class="layout">
     <nav class="rail" aria-label="Profiles">
-      <div class="rail-title" data-i18n="rail.profiles"></div>
+      <button class="btn block dash-btn" id="btnDash"><span class="led" id="dashLed"></span><span data-i18n="rail.dashboard"></span></button>
+      <div class="rail-title-row"><div class="rail-title" data-i18n="rail.profiles"></div><button class="btn small" id="btnSortAz" data-i18n="rail.sortAz" data-i18n-title="rail.sortHint"></button></div>
       <ul id="profileList" class="profile-list"></ul>
       <button class="btn block" id="btnNewProfile" data-i18n="rail.new"></button>
     </nav>

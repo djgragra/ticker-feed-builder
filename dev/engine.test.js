@@ -283,3 +283,50 @@ test('runProfile: per-feed interval; force ignores it', async () => {
   assert.deepEqual(Object.keys(await engine.runProfile(p)).sort(), ['fast', 'slow']);
   assert.deepEqual(Object.keys(await engine.runProfile(p, () => {}, { force: true })).sort(), ['fast', 'slow']);
 });
+
+import { sendEmail } from '../src/notify.js';
+import { createStore } from '../src/settings.js';
+
+test('sendEmail: one message, all recipients in Bcc, TLS required with a password, rejected addresses reported', async () => {
+  const sent = [];
+  let opts;
+  const factory = (o) => { opts = o; return { sendMail: async (m) => { sent.push(m); return { rejected: m.bcc.includes('bad@x.org') ? ['bad@x.org'] : [] }; }, close() {} }; };
+  const cfg = { enabled: true, host: 'smtp.example.com', port: 587, secure: false, user: 'u', pass: 'secret', from: 'alerts@example.com', recipients: ['a@x.org', 'b@x.org'] };
+  await sendEmail(cfg, 'subj', 'body', 'en', factory);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].bcc, ['a@x.org', 'b@x.org']);
+  assert.equal(sent[0].to, 'alerts@example.com');
+  assert.equal(opts.requireTLS, true);
+  assert.equal(opts.secure, false);
+  await assert.rejects(sendEmail({ ...cfg, recipients: ['a@x.org', 'bad@x.org'] }, 's', 'b', 'en', factory), /bad@x.org/);
+  await assert.rejects(sendEmail({ ...cfg, recipients: [] }, 's', 'b', 'en', factory), /not set up/);
+  await sendEmail({ ...cfg, enabled: false }, 's', 'b', 'en', factory); // disabled: silently nothing
+  assert.equal(sent.length, 2);
+  // the password must not leak into an error message
+  const boom = () => ({ sendMail: async () => { throw new Error('auth failed for secret'); }, close() {} });
+  await assert.rejects(sendEmail(cfg, 's', 'b', 'en', boom), (e) => !e.message.includes('secret') && e.message.includes('***'));
+});
+
+test('alerter: email and Telegram both get the alert (several recipients live in their settings)', async () => {
+  const calls = [];
+  const settings = { language: 'en', notifications: { desktop: false, failThreshold: 1, telegram: { enabled: true }, email: { enabled: true } } };
+  const a = createAlerter({ getSettings: () => settings, deps: { sendTelegram: async (c, t) => calls.push(['tg', t]), sendEmail: async (c, subj, t) => calls.push(['mail', subj, t]) } });
+  a.check('feed:1', false, { downText: () => 'Feed down. Details', upText: () => 'up' });
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(calls.map((c) => c[0]).sort(), ['mail', 'tg']);
+  assert.match(calls.find((c) => c[0] === 'mail')[1], /^\[Ticker Feed Builder\] Feed down/);
+});
+
+test('settings: email recipients are validated and de-duplicated; theme is checked; profile order can be changed', () => {
+  const s = sanitizeSettings({ theme: 'purple', notifications: { email: { recipients: ['A@x.org', 'a@x.org', 'not-an-address', 'b@y.it'], port: 99999 } } });
+  assert.equal(s.theme, 'dark');
+  assert.deepEqual(s.notifications.email.recipients, ['A@x.org', 'b@y.it']);
+  assert.equal(s.notifications.email.port, 65535);
+  assert.equal(sanitizeSettings({ theme: 'light' }).theme, 'light');
+  const store = createStore({ file: path.join(os.tmpdir(), `tfb-store-${Date.now()}`, 'settings.json') });
+  const ids = ['A', 'B', 'C'].map((n) => store.saveProfile(newProfile(n)).id);
+  assert.deepEqual(store.get().profiles.map((p) => p.name), ['A', 'B', 'C']);
+  store.reorderProfiles([ids[2], ids[0], 'unknown']);
+  assert.deepEqual(store.get().profiles.map((p) => p.name), ['C', 'A', 'B']); // unlisted profile keeps its place at the end
+  store.flush();
+});

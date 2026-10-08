@@ -35,10 +35,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   notifications: {
     desktop: true,
     failThreshold: 3, // alert after this many failed runs in a row
-    telegram: { enabled: false, botToken: '', recipients: [] } // recipients: [{ chatId, note }]
+    telegram: { enabled: false, botToken: '', recipients: [] }, // recipients: [{ chatId, note }]
+    email: { enabled: false, host: '', port: 587, secure: false, user: '', pass: '', from: '', recipients: [] } // recipients: [address]
   },
+  theme: 'dark', // 'dark' | 'light' | 'auto' (follow the system)
   closeHintShown: false
 });
+
+export const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
@@ -106,6 +110,7 @@ export function sanitizeSettings(s) {
   const d = DEFAULT_SETTINGS;
   const out = deepMerge(structuredClone(d), isObj(s) ? s : {});
   if (!['en', 'it', 'es'].includes(out.language)) out.language = d.language;
+  if (!['dark', 'light', 'auto'].includes(out.theme)) out.theme = d.theme;
   const ids = new Set();
   out.profiles = (Array.isArray(out.profiles) ? out.profiles : []).slice(0, MAX_PROFILES).map((p) => sanitizeProfile(p, ids));
   const g = out.general;
@@ -120,6 +125,17 @@ export function sanitizeSettings(s) {
     .map((x) => ({ chatId: String(x?.chatId ?? '').trim(), note: String(x?.note ?? '').trim().slice(0, 80) }))
     .filter((x) => x.chatId)
     .slice(0, 20);
+  const em = n.email;
+  em.enabled = !!em.enabled;
+  em.host = String(em.host || '').trim().slice(0, 200);
+  em.port = clamp(em.port, 1, 65535, 587);
+  em.secure = !!em.secure;
+  em.user = String(em.user || '').trim().slice(0, 200);
+  em.pass = String(em.pass || '').slice(0, 300);
+  em.from = String(em.from || '').trim().slice(0, 200);
+  const raw = Array.isArray(em.recipients) ? em.recipients : String(em.recipients || '').split(/[\s,;]+/);
+  const seen = new Set();
+  em.recipients = raw.map((x) => String(x || '').trim()).filter((x) => EMAIL_RE.test(x) && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase())).slice(0, 20);
   out.closeHintShown = !!out.closeHintShown;
   return out;
 }
@@ -136,6 +152,7 @@ export function newProfile(name, withStarterFeeds = false) {
 export function exportable(settings) {
   const s = structuredClone(settings);
   s.notifications.telegram.botToken = '';
+  s.notifications.email.pass = '';
   return s;
 }
 
@@ -147,6 +164,8 @@ export function createStore({ file, seal = (v) => v, open = (v) => v, now = Date
     const s = structuredClone(settings);
     const t = s.notifications?.telegram;
     if (t && typeof t.botToken === 'string' && t.botToken) t.botToken = fn(t.botToken);
+    const e = s.notifications?.email;
+    if (e && typeof e.pass === 'string' && e.pass) e.pass = fn(e.pass);
     return s;
   }
 
@@ -200,6 +219,16 @@ export function createStore({ file, seal = (v) => v, open = (v) => v, now = Date
       else if (data.profiles.length < MAX_PROFILES) data.profiles.push(clean);
       schedule();
       return structuredClone(clean);
+    },
+    // New order of the profiles (also the order of the dashboard). Unknown ids are ignored; profiles not listed keep their place at the end.
+    reorderProfiles(ids) {
+      const list = Array.isArray(ids) ? ids.map(String) : [];
+      const byId = new Map(data.profiles.map((p) => [p.id, p]));
+      const next = [...new Set(list)].filter((id) => byId.has(id)).map((id) => byId.get(id));
+      for (const p of data.profiles) if (!next.includes(p)) next.push(p);
+      data.profiles = next;
+      schedule();
+      return data.profiles.map((p) => p.id);
     },
     deleteProfile(pid) {
       data.profiles = data.profiles.filter((p) => p.id !== pid);

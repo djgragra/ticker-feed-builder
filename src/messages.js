@@ -9,6 +9,8 @@ const M = {
     paused: 'paused', withProblems: 'with problems', open: 'Open Ticker Feed Builder', runAll: 'Run all profiles now', pause: 'Pause schedules', resume: 'Resume schedules', quit: 'Quit',
     test: 'Test message: Telegram alerts are working.',
     tgIncomplete: 'Telegram is not set up: bot token and at least one chat ID are needed.',
+    emailIncomplete: 'Email is not set up: an SMTP server, a sender and at least one valid recipient are needed.',
+    emailFailed: 'Email: ',
     tgFailed: 'Telegram: '
   },
   it: {
@@ -20,6 +22,8 @@ const M = {
     paused: 'in pausa', withProblems: 'con problemi', open: 'Apri Ticker Feed Builder', runAll: 'Esegui ora tutti i profili', pause: 'Metti in pausa', resume: 'Riprendi', quit: 'Esci',
     test: 'Messaggio di prova: gli avvisi Telegram funzionano.',
     tgIncomplete: 'Telegram non è configurato: servono il token del bot e almeno un chat ID.',
+    emailIncomplete: 'L\'email non è configurata: servono un server SMTP, un mittente e almeno un destinatario valido.',
+    emailFailed: 'Email: ',
     tgFailed: 'Telegram: '
   },
   es: {
@@ -31,6 +35,8 @@ const M = {
     paused: 'en pausa', withProblems: 'con problemas', open: 'Abrir Ticker Feed Builder', runAll: 'Ejecutar todos los perfiles ahora', pause: 'Pausar', resume: 'Reanudar', quit: 'Salir',
     test: 'Mensaje de prueba: las alertas de Telegram funcionan.',
     tgIncomplete: 'Telegram no está configurado: hacen falta el token del bot y al menos un chat ID.',
+    emailIncomplete: 'El correo no está configurado: hacen falta un servidor SMTP, un remitente y al menos un destinatario válido.',
+    emailFailed: 'Correo: ',
     tgFailed: 'Telegram: '
   }
 };

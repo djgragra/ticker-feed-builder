@@ -1,5 +1,13 @@
 # Changelog
 
+## 26.10.4 — 2026-10-08
+
+- Email alerts (SMTP): server, port, TLS/STARTTLS, user, password, sender and **several recipients** (one message, all in Bcc). Telegram already took several chat IDs. Test button for each channel. With a user name the connection must be encrypted; the password is stored encrypted with the system keystore when available and never exported.
+- The Dashboard is now a separate button above the profile list, not an item of it.
+- Profile order: drag, ▲▼ buttons or Alt + arrows; "A–Z" button for alphabetical order. The order is saved and the dashboard follows it.
+- Dashboard: current date and time, a time-ordered list of the next checks (what and when, with countdown), and date + time in the last-check and last-update columns.
+- Light and dark theme (dark by default), or follow the system; selector in the top bar, choice saved.
+
 ## 26.10.3 — 2026-10-08
 
 - Publishers' terms: a visible note under the feed list and in the new-profile dialog, and a new help section "Feeds and publishers' terms" with what the ANSA and Adnkronos RSS pages say (read on 2026-10-08): free to download does not mean free to broadcast; public display needs an agreement with the publisher.

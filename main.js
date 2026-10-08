@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createEngine } from './src/engine.js';
 import { createScheduler } from './src/scheduler.js';
 import { createLogger } from './src/logger.js';
-import { createAlerter, sendTelegram } from './src/notify.js';
+import { createAlerter, sendTelegram, sendEmail } from './src/notify.js';
 import { createStore, exportable, newProfile, sanitizeSettings, sanitizeUrl } from './src/settings.js';
 import { msg } from './src/messages.js';
 import { sanitizeFormat } from './src/format.js';
@@ -127,7 +127,7 @@ function createWindow({ show = true } = {}) {
     minHeight: 560,
     show,
     title: 'Ticker Feed Builder',
-    backgroundColor: '#0d0f12',
+    backgroundColor: BG[settings().theme === 'light' ? 'light' : 'dark'],
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -211,6 +211,15 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []), { role: 'editMenu' }, { role: 'windowMenu' }]));
 }
 
+const BG = { dark: '#0d0f12', light: '#f3f4f6' };
+function applyTheme() {
+  const th = settings().theme;
+  nativeTheme.themeSource = th === 'auto' ? 'system' : th;
+  const dark = th === 'auto' ? nativeTheme.shouldUseDarkColors : th === 'dark';
+  mainWindow?.setBackgroundColor(dark ? BG.dark : BG.light);
+}
+nativeTheme.on('updated', () => settings().theme === 'auto' && applyTheme());
+
 function applySystemSettings() {
   const g = settings().general;
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: g.startOnBoot, args: ['--hidden'] });
@@ -225,7 +234,7 @@ function applySystemSettings() {
 app.whenReady().then(() => {
   init();
   buildMenu();
-  nativeTheme.themeSource = 'dark'; // On-Air tool: dark only
+  applyTheme();
   const g = settings().general;
   createWindow({ show: !(startedHidden || g.startMinimized) });
   tray = new Tray(trayImage());
@@ -248,6 +257,7 @@ app.on('before-quit', () => {
 
 const afterSettingsChange = () => {
   applySystemSettings();
+  applyTheme();
   scheduler.refresh();
   refreshTray();
   send('settings:changed', settings());
@@ -283,6 +293,7 @@ ipcMain.handle('profile:delete', (_e, id) => {
   return true;
 });
 
+ipcMain.handle('profile:reorder', (_e, ids) => store.reorderProfiles(ids));
 ipcMain.handle('profile:run', (_e, id) => scheduler.runNow(String(id)));
 ipcMain.handle('profile:open-output', async (_e, id) => {
   const p = settings().profiles.find((x) => x.id === id);
@@ -341,6 +352,7 @@ ipcMain.handle('settings:import', async () => {
     if (raw?.app !== 'ticker-feed-builder' || typeof raw.settings !== 'object') throw new Error('not a Ticker Feed Builder settings file');
     const incoming = sanitizeSettings(raw.settings);
     incoming.notifications.telegram.botToken = settings().notifications.telegram.botToken; // secrets never travel in the file
+    incoming.notifications.email.pass = settings().notifications.email.pass;
     store.replace(incoming);
     afterSettingsChange();
     return { ok: true, settings: settings() };
@@ -363,6 +375,20 @@ ipcMain.handle('telegram:test', async (_e, cfg) => {
       recipients: Array.isArray(cfg?.recipients) ? cfg.recipients.slice(0, 20).map((r) => ({ chatId: String(r?.chatId ?? ''), note: String(r?.note ?? '') })) : settings().notifications.telegram.recipients
     };
     await sendTelegram(c, msg(lang, 'test'), lang);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('email:test', async (_e, cfg) => {
+  const lang = settings().language;
+  try {
+    const cur = settings().notifications.email;
+    const c = { ...cur, ...(cfg && typeof cfg === 'object' ? cfg : {}), enabled: true };
+    if (!cfg?.pass) c.pass = cur.pass; // the password is not echoed to the page
+    c.recipients = Array.isArray(c.recipients) ? c.recipients.slice(0, 20).map(String) : cur.recipients;
+    await sendEmail(c, `${'[Ticker Feed Builder]'} ${msg(lang, 'test').slice(0, 60)}`, msg(lang, 'test'), lang);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };

@@ -94,7 +94,7 @@ try {
   await cdp('Page.reload');
   await sleep(1500);
   console.log('feeds after reload:', await ev(`api.settings.get().then(s => s.profiles[0].feeds.length + ' ' + s.profiles[0].outputDir)`));
-  await ev(`document.querySelectorAll('.profile-item')[1].click()`);
+  await ev(`document.querySelectorAll('.profile-item')[0].click()`);
   await ev(`document.querySelector('#btnRun').click()`);
   for (let i = 0; i < 40 && !fs.existsSync(path.join(out, 'News_Title.Txt')); i++) await sleep(250);
 
@@ -109,11 +109,19 @@ try {
   assert.deepEqual(errors, [], 'errors: ' + errors.join(' | '));
   assert.match(await ev(`document.querySelector('td.st').textContent`), /2 items/);
 
-  await ev(`document.querySelectorAll('.profile-item')[0].click()`); // dashboard
+  await ev(`document.querySelector('#btnDash').click()`); // dashboard
   await sleep(300);
   assert.match(await ev(`document.querySelector('#main').textContent`), /Feeds OK/);
+  assert.match(await ev(`document.querySelector('#main').textContent`), /Upcoming checks/);
   await shot('02b-dashboard');
-  await ev(`document.querySelectorAll('.profile-item')[1].click()`);
+  // theme: light and back
+  await ev(`(() => { const t = document.querySelector('#theme'); t.value = 'light'; t.dispatchEvent(new Event('change')); })()`);
+  await sleep(300);
+  assert.equal(await ev(`document.documentElement.dataset.theme`), 'light');
+  await shot('02c-dashboard-light');
+  await ev(`(() => { const t = document.querySelector('#theme'); t.value = 'dark'; t.dispatchEvent(new Event('change')); })()`);
+  await sleep(200);
+  await ev(`document.querySelectorAll('.profile-item')[0].click()`);
   await sleep(200);
   await ev(`document.querySelectorAll('.tab')[1].click()`);
   await sleep(200);
@@ -127,6 +135,9 @@ try {
   await ev(`document.querySelector('#dlgTest').close(); document.querySelector('#btnSettings').click()`);
   await sleep(300);
   await shot('06-settings');
+  await ev(`document.querySelector('#settingsBody').scrollTop = 99999`);
+  await sleep(200);
+  await shot('06b-settings-email');
   await ev(`document.querySelector('#dlgSettings').close(); document.querySelector('#btnHelp').click()`);
   await sleep(300);
   await shot('07-help');

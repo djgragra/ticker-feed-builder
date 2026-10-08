@@ -23,10 +23,11 @@ It replaces the `rss_ticker_downloader.py` scripts that fed NeMedia Morpheus fro
 - **Safe writes**: each file is written under a temporary name and renamed; unchanged files are not touched; if a download fails the previous files stay as they were; a missing output folder is reported and never created (an unplugged drive must not become a local folder); numbered images left over from a longer previous run are removed.
 - **Configurable format** (the defaults reproduce the original scripts): text encoding (UTF-8, UTF-8 with BOM, Windows-1252), line ending, file name templates (`{folder}`), image number start/digits/extension, JPEG quality, optional resize (fill or fit), title/description length limits.
 - **Checks**: each profile has a check interval (default 5 min) and each feed can have its own. A check first asks the server whether the feed changed (`ETag` / `Last-Modified`; answer 304 = nothing is downloaded). If the server cannot say, the feed is downloaded and its content compared with the previous copy (same content = no image download, no file touched). Images are downloaded and files written only when something is new; a failed image is retried at the next check, and a deleted output file or an edited setting triggers a rebuild. "Run now" always rebuilds everything.
-- **Dashboard**: all profiles at a glance (schedule state, feeds OK / with problems, next check, last file update, per feed last check and last update, recent warnings and errors).
-- **Alerts**: desktop notification and/or Telegram when a feed fails N runs in a row, when an output folder disappears, and on recovery. No email: it would need an SMTP server and a stored password.
+- **Dashboard** (its own button above the profile list): date and time, schedule state, feeds OK / with problems, a time-ordered list of the next checks (what will be checked and when, with countdown), per profile and per feed last check and last file update with date and time, recent warnings and errors. Profiles show in the order of the left column.
+- **Profile order**: drag the profiles in the left column, use the ▲▼ buttons or Alt + arrow keys, or press A–Z for alphabetical order. The order is saved and the dashboard follows it.
+- **Alerts**: desktop notification, Telegram and/or email (SMTP) when a feed fails N runs in a row, when an output folder disappears, and on recovery. Telegram and email take several recipients; the email goes out as one message with all recipients in Bcc. Passwords and tokens stay on the computer, encrypted with the system keystore when available, and are never exported. With an SMTP user name the connection must be encrypted (STARTTLS or TLS). Each channel has a test button.
 - Feed test with preview (nothing is written), live log with daily log files, settings export/import (the Telegram token is never exported), update check against the public GitHub releases with a download verified against `SHA256SUMS.txt`, start with the computer, keep-awake option.
-- Languages: English (default, the app always opens in English), Italiano, Español; the choice is remembered. Dark theme only (On-Air tool).
+- Languages: English (default, the app always opens in English), Italiano, Español; the choice is remembered. Theme: dark (default), light, or follow the system.
 
 The default layout is the one the original scripts produced for NeMedia Morpheus. **It has not been checked against NeMedia documentation** (none was read); other ticker systems may need other names, encodings or sizes, which is why everything is configurable.
 
@@ -51,6 +52,7 @@ No measurements or standards-based formulas. The external rules used:
 | Characters not allowed in a file name, reserved names (`CON`, `PRN`, `NUL`, `COM1`…) | Microsoft Learn, *Naming Files, Paths, and Namespaces* — same rules as in File Renamer | **official** (read in the File Renamer project, not re-read for this release) |
 | Default output layout and file names | original scripts v3.2 supplied by the author | reference implementation |
 | Telegram `sendMessage` | Telegram Bot API | **not re-read for this release** |
+| SMTP submission (STARTTLS / TLS), Bcc | nodemailer library defaults; no RFC read for this release | **recommended** (practice) |
 | Terms of use of the ANSA and Adnkronos RSS feeds | the two RSS pages above | **official** (read 2026-10-08, summarised) |
 
 ## Assumptions and limits
@@ -67,12 +69,12 @@ Results as of October 2026.
 
 | Reference | What it validates | Result | How to re-run |
 |---|---|---|---|
-| Automated tests (16) | text cleaning, RSS/Atom parsing, line/image sync, empty values, orphan removal, unchanged files, change detection (304, same content, failed-image retry, deleted output, per-feed interval), failure keeps old files, missing folder not created, private image addresses, scheduler, alerts | pass | `npm test` |
+| Automated tests (19) | text cleaning, RSS/Atom parsing, line/image sync, empty values, orphan removal, unchanged files, change detection (304, same content, failed-image retry, deleted output, per-feed interval), failure keeps old files, missing folder not created, private image addresses, scheduler, alerts | pass | `npm test` |
 | Original Python script v3.2 on 8 live feeds (2026-10-08, macOS) | same titles and descriptions as the original for the same feeds | 14 of 16 text files byte-identical; the other 2 differ only because the feeds changed between the two runs (stories shifted by one); one title carried an invisible BOM character in the original, which the app removes | run both on the same feeds and compare (`cmp`) |
 | Same run | number of images per feed | equal for all 8 feeds | same |
 | End-to-end on the real Electron app (macOS) | create profile, run, files on disk, status in the UI, language switch, no console errors | pass | `node dev/e2e-electron.mjs [screenshotDir]` |
 
-**Not validated**: playback in NeMedia Morpheus or any other ticker system; Windows (paths, drives, file locking by a player, installer); Linux; runs lasting days; Telegram delivery against the real service (unit-tested with a fake only); Windows-1252 output beyond a unit test. This is not a certified tool.
+**Not validated**: playback in NeMedia Morpheus or any other ticker system; Windows (paths, drives, file locking by a player, installer); Linux; runs lasting days; Telegram and email delivery against real services (unit-tested with fakes only); Windows-1252 output beyond a unit test. This is not a certified tool.
 
 ## Sources to re-check
 
@@ -80,6 +82,7 @@ Results as of October 2026.
 |---|---|
 | RSS 2.0 specification, Atom (RFC 4287), Media RSS | not read for this release |
 | Telegram Bot API | not read for this release |
+| SMTP (RFC 5321 / 6409) | not read for this release |
 | NeMedia Morpheus manual (expected file layout) | not read |
 | ANSA RSS page (`ansa.it/sito/static/ansa_rss.html`) | read 2026-10-08, no version or date on the page |
 | Adnkronos RSS page (`adnkronos.com/rss`) | read 2026-10-08, no version on the page |
@@ -105,4 +108,4 @@ Versions are `YY.M.N` (e.g. `26.10.1`), tags `vYY.M.N`.
 
 ## Credits
 
-[fast-xml-parser](https://github.com/NaturalIntelligence/fast-xml-parser) (MIT), [jimp](https://github.com/jimp-dev/jimp) (MIT), [iconv-lite](https://github.com/ashtuchkin/iconv-lite) (MIT), [Electron](https://www.electronjs.org/) (MIT). No fonts are bundled.
+[fast-xml-parser](https://github.com/NaturalIntelligence/fast-xml-parser) (MIT), [jimp](https://github.com/jimp-dev/jimp) (MIT), [iconv-lite](https://github.com/ashtuchkin/iconv-lite) (MIT), [nodemailer](https://nodemailer.com/) (MIT-0), [Electron](https://www.electronjs.org/) (MIT). No fonts are bundled.
