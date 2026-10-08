@@ -1,0 +1,79 @@
+{
+  "name": "ticker-feed-builder",
+  "version": "26.10.1",
+  "description": "Turns RSS feeds into numbered text lines and JPG images for TV tickers and playout graphics, on a schedule",
+  "main": "main.js",
+  "type": "module",
+  "author": "Graziano Melzi <hello@onairgarage.com> (https://onairgarage.com)",
+  "homepage": "https://onairgarage.com/tools/ticker-feed-builder/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/djgragra/ticker-feed-builder.git"
+  },
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test dev/*.test.js",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^44.4.3",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.onairgarage.tickerfeedbuilder",
+    "productName": "Ticker Feed Builder",
+    "publish": null,
+    "files": [
+      "main.js",
+      "preload.cjs",
+      "src/**/*",
+      "renderer/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.utilities",
+      "artifactName": "Ticker-Feed-Builder-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "assets/linux-icons",
+      "category": "Utility",
+      "artifactName": "Ticker-Feed-Builder-${version}.${ext}"
+    },
+    "nsis": {
+      "artifactName": "Ticker-Feed-Builder-Setup-${version}.exe",
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "shortcutName": "Ticker Feed Builder"
+    }
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.11.2",
+    "iconv-lite": "^0.7.3",
+    "jimp": "^1.6.1"
+  }
+}
