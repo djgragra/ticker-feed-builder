@@ -1,5 +1,10 @@
 # Changelog
 
+## 26.10.3 — 2026-10-08
+
+- Publishers' terms: a visible note under the feed list and in the new-profile dialog, and a new help section "Feeds and publishers' terms" with what the ANSA and Adnkronos RSS pages say (read on 2026-10-08): free to download does not mean free to broadcast; public display needs an agreement with the publisher.
+- The starter feed set (ANSA, Adnkronos) is for testing only and will be removed before the public release.
+
 ## 26.10.2 — 2026-10-08
 
 - Change detection: a check now asks the server whether the feed changed (ETag / Last-Modified) and compares the content with the previous run; images are downloaded and files written only when something is new. A failed image is retried at the next check; a deleted output file or edited setting triggers a rebuild. "Run now" always rebuilds everything. The `_metadata.json` file is rewritten only when something changed.

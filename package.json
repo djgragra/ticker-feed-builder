@@ -1,6 +1,6 @@
 {
   "name": "ticker-feed-builder",
-  "version": "26.10.2",
+  "version": "26.10.3",
   "description": "Turns RSS feeds into numbered text lines and JPG images for TV tickers and playout graphics, on a schedule",
   "main": "main.js",
   "type": "module",

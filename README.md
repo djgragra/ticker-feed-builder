@@ -30,6 +30,17 @@ It replaces the `rss_ticker_downloader.py` scripts that fed NeMedia Morpheus fro
 
 The default layout is the one the original scripts produced for NeMedia Morpheus. **It has not been checked against NeMedia documentation** (none was read); other ticker systems may need other names, encodings or sizes, which is why everything is configurable.
 
+## Feeds and publishers' terms
+
+A feed that is free to download is not necessarily free to broadcast. Publishers usually offer RSS for personal reading; showing their headlines publicly on TV, screens or websites normally needs an agreement with the publisher. That responsibility is the user's; this is not legal advice. The app is meant to ship **without any feed**; the examples below come from the pages read on 8 October 2026 (paraphrased; the pages carry no version or date, so read the current text before relying on it).
+
+| Publisher | What its RSS page says | Page |
+|---|---|---|
+| ANSA | Non-commercial use by individuals and non-profit organisations, only to view the feeds in RSS reader programs; using them to publish the latest headlines on websites or blogs is not allowed; any other use must be requested and expressly authorised. | https://www.ansa.it/sito/static/ansa_rss.html |
+| Adnkronos | Non-commercial use by individuals and non-profit organisations; the feeds may not be made public (websites, blogs, outdoor communication systems, any other means that spreads the news publicly) without a prior agreement with Adnkronos. | https://www.adnkronos.com/rss |
+
+Both pages list their feeds by section (politics, foreign news, sport…); use them as examples of what to ask for in an agreement.
+
 ## Formulas and sources
 
 No measurements or standards-based formulas. The external rules used:
@@ -40,6 +51,7 @@ No measurements or standards-based formulas. The external rules used:
 | Characters not allowed in a file name, reserved names (`CON`, `PRN`, `NUL`, `COM1`…) | Microsoft Learn, *Naming Files, Paths, and Namespaces* — same rules as in File Renamer | **official** (read in the File Renamer project, not re-read for this release) |
 | Default output layout and file names | original scripts v3.2 supplied by the author | reference implementation |
 | Telegram `sendMessage` | Telegram Bot API | **not re-read for this release** |
+| Terms of use of the ANSA and Adnkronos RSS feeds | the two RSS pages above | **official** (read 2026-10-08, summarised) |
 
 ## Assumptions and limits
 
@@ -69,6 +81,8 @@ Results as of October 2026.
 | RSS 2.0 specification, Atom (RFC 4287), Media RSS | not read for this release |
 | Telegram Bot API | not read for this release |
 | NeMedia Morpheus manual (expected file layout) | not read |
+| ANSA RSS page (`ansa.it/sito/static/ansa_rss.html`) | read 2026-10-08, no version or date on the page |
+| Adnkronos RSS page (`adnkronos.com/rss`) | read 2026-10-08, no version on the page |
 
 ## Run locally
 

@@ -200,7 +200,8 @@ function feedsTab(p, change) {
       : h('p', { class: 'hint', text: t('f.none') }),
     h('div', { class: 'toolbar' },
       h('button', { class: 'btn', text: t('f.add'), onclick: () => { p.feeds.push({ id: crypto.randomUUID(), folder: `Feed${p.feeds.length + 1}`, url: '', maxItems: 10, intervalMin: 0, enabled: true, insecureTls: false }); change(); renderMain(); } })),
-    h('p', { class: 'hint', text: t('f.duplicate') })
+    h('p', { class: 'hint', text: t('f.duplicate') }),
+    h('div', { class: 'alert-line warn-line', text: t('f.legal') })
   );
 }
 

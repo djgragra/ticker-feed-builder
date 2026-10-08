@@ -150,3 +150,5 @@ table.feeds input[type=number] { width: 64px; }
 .log.short { height: auto; max-height: 220px; }
 .phprev { display: flex; flex-direction: column; gap: 4px; }
 .phprev img { border: 1px solid var(--line); border-radius: 6px; object-fit: cover; background: #0b0d10; }
+
+.warn-line { background: #2a2210; border-left-color: var(--warn); color: #e8d9a8; max-width: 860px; margin-top: 12px; }
