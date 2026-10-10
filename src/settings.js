@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DEFAULT_FORMAT, safeName, sanitizeFormat } from './format.js';
-import { isTime } from './schedule-rules.js';
+import { isTime, PLAN_MODES } from './schedule-rules.js';
 
 export const MAX_PROFILES = 20;
 export const MAX_FEEDS = 100;
@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     keepAwake: true, // do not let the computer sleep: a sleeping computer stops updating the ticker
     logRetentionDays: 30,
     checkUpdates: true,
+    staggerProfiles: false, // spread profiles that share an interval evenly inside it (two profiles every 5 min: 2:30 apart)
     rememberState: true // keep what each feed looked like across restarts (no needless downloads after a restart)
   },
   notifications: {
@@ -105,6 +106,14 @@ function sanitizeFeed(raw, ids, folders) {
 }
 
 const DAYS_ALL = [0, 1, 2, 3, 4, 5, 6];
+export function sanitizePlan(raw) {
+  const r = isObj(raw) ? raw : {};
+  const rawTimes = Array.isArray(r.times) ? r.times : String(r.times || '').split(/[\s,;]+/);
+  const times = [...new Set(rawTimes.map((x) => String(x).trim()).filter((x) => isTime(x) && x !== '24:00').map((x) => x.padStart(5, '0')))].sort().slice(0, 48);
+  const days = [...new Set((Array.isArray(r.days) ? r.days : DAYS_ALL).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
+  return { mode: PLAN_MODES.includes(r.mode) ? r.mode : 'interval', times: times.length ? times : ['08:00'], days: days.length ? days : DAYS_ALL };
+}
+
 export function sanitizeSchedule(raw) {
   const r = isObj(raw) ? raw : {};
   const windows = (Array.isArray(r.windows) ? r.windows : []).slice(0, 12).map((w) => {
@@ -137,6 +146,7 @@ export function sanitizeProfile(raw, ids = new Set()) {
     staleHours: clamp(r.staleHours, 0, 720, 0), // 0 = off
     dedupeAcrossFeeds: !!r.dedupeAcrossFeeds, // a story already used by an earlier feed of the profile is left out of the later ones
     verifyOutput: r.verifyOutput !== false, // read the files back after writing and check they agree
+    plan: sanitizePlan(r.plan),
     schedule: sanitizeSchedule(r.schedule),
     feeds,
     format: sanitizeFormat(r.format)
@@ -151,7 +161,7 @@ export function sanitizeSettings(s) {
   const ids = new Set();
   out.profiles = (Array.isArray(out.profiles) ? out.profiles : []).slice(0, MAX_PROFILES).map((p) => sanitizeProfile(p, ids));
   const g = out.general;
-  for (const k of ['startOnBoot', 'startMinimized', 'runOnLaunch', 'keepAwake', 'checkUpdates', 'rememberState']) g[k] = !!g[k];
+  for (const k of ['startOnBoot', 'startMinimized', 'runOnLaunch', 'keepAwake', 'checkUpdates', 'rememberState', 'staggerProfiles']) g[k] = !!g[k];
   g.logRetentionDays = clamp(g.logRetentionDays, 1, 365, 30);
   const n = out.notifications;
   n.desktop = !!n.desktop;

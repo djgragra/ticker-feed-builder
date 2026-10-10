@@ -333,3 +333,9 @@ td.st .time { display: block; margin-top: 3px; }
 :root { --accent-soft: rgba(240,138,36,.09); }
 :root[data-theme="light"] { --accent-soft: rgba(194,97,10,.08); }
 .tiles { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
+
+/* schedule of a profile */
+.planbox { display: flex; flex-direction: column; gap: 8px; }
+.planbox .inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.planbox .days { display: flex; gap: 10px; flex-wrap: wrap; }
+.planbox .day { display: inline-flex; align-items: center; gap: 4px; }

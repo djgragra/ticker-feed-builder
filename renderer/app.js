@@ -110,6 +110,12 @@ function dashLed() {
   return leds.includes('bad') ? 'bad' : leds.includes('warn') ? 'warn' : leds.includes('run') ? 'run' : leds.includes('ok') ? 'ok' : '';
 }
 
+// the plan of a profile in a few words, for the profile list
+function planText(p) {
+  if (p.plan.mode === 'times') return p.plan.times.length > 3 ? t('plan.nTimes', { n: p.plan.times.length }) : p.plan.times.join(' ');
+  return p.plan.mode === 'aligned' ? t('plan.alignedShort', { n: p.intervalMin }) : `${p.intervalMin} min`;
+}
+
 // the last time a file of this profile was really rewritten
 function profileUpdated(p) {
   const st = state.status.profiles[p.id];
@@ -141,7 +147,7 @@ function renderRail() {
         h('span', { class: 'led ' + profileLed(p) }),
         h('div', { class: 'pname' },
           h('div', { class: 'pline' }, h('span', { class: 'ptitle', text: p.name }), h('span', { class: 'pstate ' + (p.enabled ? profileLed(p) : 'off'), text: t(p.enabled ? STATE_KEY[profileLed(p)] : 'state.off') })),
-          h('div', { class: 'psub' }, `${p.feeds.filter((f) => f.enabled).length}/${p.feeds.length} feeds · ${p.intervalMin} min`),
+          h('div', { class: 'psub' }, `${p.feeds.filter((f) => f.enabled).length}/${p.feeds.length} feeds · ${planText(p)}`),
           profileUpdated(p) ? h('div', { class: 'psub' }, t('rail.updated', { time: fmtTime(profileUpdated(p)) })) : null),
         h('div', { class: 'mv' },
           h('button', { class: 'mvb', title: t('rail.up'), 'aria-label': t('rail.up'), disabled: i === 0, onclick: (e) => { e.stopPropagation(); moveProfile(p.id, -1); } }, '▲'),
@@ -211,6 +217,22 @@ function select(id) {
 }
 
 // ---- main panel ---------------------------------------------------------------------------------
+// how often the profile is checked: every N minutes / every N minutes on the clock / at fixed times
+function planControls(p, change) {
+  const plan = p.plan;
+  const minutes = () => h('input', { type: 'number', min: 1, max: 1440, value: p.intervalMin, 'aria-label': t('p.minutes'), onchange: (e) => { p.intervalMin = Number(e.target.value) || 5; change(); renderMain(); } });
+  const mode = h('select', { 'aria-label': t('p.plan'), onchange: (e) => { plan.mode = e.target.value; change(); renderMain(); } },
+    ['interval', 'aligned', 'times'].map((m) => h('option', { value: m, selected: plan.mode === m, text: t('plan.' + m) })));
+  if (plan.mode === 'times') {
+    const times = h('input', { type: 'text', value: plan.times.join(', '), size: 26, placeholder: '06:30, 12:00, 18:45', 'aria-label': t('plan.times'),
+      onchange: (e) => { plan.times = e.target.value.split(/[\s,;]+/).filter(Boolean); change(); renderMain(); } });
+    return h('div', { class: 'planbox' },
+      h('div', { class: 'inline' }, mode, h('span', { text: t('plan.at') }), times),
+      h('div', { class: 'days' }, [1, 2, 3, 4, 5, 6, 0].map((d) => h('label', { class: 'day' }, h('input', { type: 'checkbox', checked: plan.days.includes(d), onchange: (e) => { plan.days = e.target.checked ? [...plan.days, d] : plan.days.filter((x) => x !== d); change(); } }), h('span', { text: t('o.d' + d) })))));
+  }
+  return h('div', { class: 'planbox' }, h('div', { class: 'inline' }, mode, h('span', { text: t('plan.every') }), minutes(), h('span', { text: t('p.minutes') })));
+}
+
 // nothing yet: the logo drawn large, what a profile is, one big button
 function emptyState() {
   return h('div', { class: 'empty' },
@@ -252,9 +274,10 @@ function renderMain() {
         h('button', { class: 'btn danger', text: t('p.delete'), onclick: async () => { if (await confirmDlg(t('p.deleteTitle'), t('p.deleteText'), t('common.delete'))) { await api.profiles.remove(p.id); state.settings.profiles = state.settings.profiles.filter((x) => x.id !== p.id); state.sel = state.settings.profiles[0]?.id || null; state.view = 'dash'; renderRail(); renderMain(); } } }))),
     h('div', { class: 'prow' },
       h('label', { text: t('p.enabled') }),
-      h('div', { class: 'check' }, h('input', { type: 'checkbox', checked: p.enabled, onchange: (e) => { p.enabled = e.target.checked; change(); } }),
-        h('span', { text: t('p.interval') }), h('input', { type: 'number', min: 1, max: 1440, value: p.intervalMin, onchange: (e) => { p.intervalMin = Number(e.target.value); change(); } }), h('span', { text: t('p.minutes') })),
-      h('span', {}), h('div', { class: 'hint', text: t('p.intervalHint') }),
+      h('div', { class: 'check' }, h('input', { type: 'checkbox', checked: p.enabled, onchange: (e) => { p.enabled = e.target.checked; change(); } }), h('span', { text: t('p.enabledText') })),
+      h('label', { text: t('p.plan') }),
+      planControls(p, change),
+      h('span', {}), h('div', { class: 'hint', text: t(p.plan.mode === 'interval' ? 'p.intervalHint' : 'plan.hint.' + p.plan.mode) }),
       ...pathRow('p.output', 'outputDir', { browse: 'folder', open: true }),
       ...pathRow('p.placeholder', 'placeholderPath', { browse: 'image', clear: true, hint: t('p.placeholderHint') }),
       h('span', {}), h('div', { class: 'phprev' }, h('span', { class: 'hint', text: t('p.phPreview') }), h('img', { id: 'phThumb', alt: '', width: 240, height: 135, hidden: true }))),
@@ -519,6 +542,7 @@ function upcomingChecks() {
       const r = st.feeds?.[f.id];
       let when = null;
       if (st.running) when = 'running';
+      else if (active && st.nextRunAt && p.plan.mode === 'times') when = st.nextRunAt; // every feed is checked at each fixed time
       else if (active && st.nextRunAt) {
         const due = r ? r.at + (f.intervalMin || p.intervalMin) * 60_000 - 5000 : 0;
         when = st.nextRunAt;
@@ -610,7 +634,7 @@ function renderDashboard() {
       tile(t('dash.schedules'), h('span', {}, h('span', { class: 'led ' + (state.status.active ? 'ok' : 'warn') }), ' ', state.status.active ? t('top.running') : t('top.paused')), 'small', h('button', { class: 'btn small', text: state.status.active ? t('top.pause') : t('top.resume'), onclick: async () => { state.status = await api.scheduler.setPaused(state.status.active); refreshDynamic(); } }), 'layers'),
       tile(t('dash.feedsOk'), String(ok), ok ? 'good' : '', null, 'check'),
       tile(t('dash.problems'), String(bad), bad ? 'bad' : '', null, 'alert'),
-      tile(t('dash.nextCheck'), first ? h('span', { 'data-until': String(first.when) }) : '—', '', first ? h('div', {}, h('div', { class: 'tile-sub', text: t('dash.nextWhat', { p: first.p.name, f: first.f.folder }) }), h('progress', { class: 'next-bar', max: 1000, value: 0, 'data-bar-until': String(first.when), 'data-bar-span': String(tickMs(first.p)), 'aria-label': t('dash.nextCheck') })) : null, 'pulse'),
+      tile(t('dash.nextCheck'), first ? h('span', { 'data-until': String(first.when) }) : '—', '', first ? h('div', {}, h('div', { class: 'tile-sub', text: t('dash.nextWhat', { p: first.p.name, f: first.f.folder }) }), h('progress', { class: 'next-bar', max: 1000, value: 0, 'data-bar-until': String(first.when), 'data-bar-span': String(first.p.plan.mode === 'times' ? Math.max(60_000, first.when - (state.status.profiles[first.p.id]?.lastRunAt || Date.now())) : tickMs(first.p)), 'aria-label': t('dash.nextCheck') })) : null, 'pulse'),
       tile(t('dash.lastChange'), lastChange ? fmtDateTime(lastChange) : t('dash.notYet'), 'small', null, 'edit')),
     h('section', { class: 'dcard' },
       h('div', { class: 'dcard-head' }, h('h3', { text: t('dash.upcoming') })),
@@ -712,7 +736,7 @@ function renderSettings() {
   });
   $('#settingsBody').replaceChildren(
     h('div', { class: 'sec' }, h('h3', { text: t('s.general') }),
-      gen('startOnBoot', 's.startOnBoot'), gen('startMinimized', 's.startMinimized'), gen('runOnLaunch', 's.runOnLaunch'), gen('keepAwake', 's.keepAwake'), gen('rememberState', 's.remember'),
+      gen('startOnBoot', 's.startOnBoot'), gen('startMinimized', 's.startMinimized'), gen('runOnLaunch', 's.runOnLaunch'), gen('staggerProfiles', 's.stagger'), h('p', { class: 'hint', text: t('s.staggerHint') }), gen('keepAwake', 's.keepAwake'), gen('rememberState', 's.remember'),
       h('div', { class: 'check' }, h('span', { text: t('s.logDays') }), h('input', { type: 'number', min: 1, max: 365, value: g.logRetentionDays, onchange: (e) => patchSettings({ general: { logRetentionDays: Number(e.target.value) } }) }), h('span', { text: t('s.days') }))),
     h('div', { class: 'sec' }, h('h3', { text: t('s.alerts') }),
       h('p', { class: 'hint', text: t('s.alertsHint') }),

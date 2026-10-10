@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { createEngine, classify } from '../src/engine.js';
 import { createRuntime } from '../src/runtime.js';
 import { createScheduler } from '../src/scheduler.js';
-import { scheduleState } from '../src/schedule-rules.js';
+import { scheduleState, nextAligned, nextTime, lastTime } from '../src/schedule-rules.js';
 import { applyFilters } from '../src/filters.js';
 import { buildDigest } from '../src/digest.js';
 import { toJpeg, isJpegBytes } from '../src/image.js';
@@ -382,4 +382,136 @@ test('icons: the SVG sources exist and every icon file is a real image of the ri
   const icns = await fs.readFile(new URL('icon.icns', dir));
   assert.equal(icns.subarray(0, 4).toString(), 'icns');
   assert.equal(icns.readUInt32BE(4), icns.length);
+});
+
+const D = (h, m = 0, s0 = 0, day = 5) => new Date(2026, 9, day, h, m, s0).getTime(); // 2026-10-05 is a Monday
+const fakeTimers = () => { const timers = []; return { timers, setTimer: (fn, ms) => { const h = { fn, ms }; timers.push(h); return h; }, clearTimer: (h) => { const i = timers.indexOf(h); if (i >= 0) timers.splice(i, 1); } }; };
+
+test('plan: clock-aligned slots, fixed times and the last missed time', () => {
+  // every 15 minutes on the clock
+  assert.equal(nextAligned(D(10, 7), 15), D(10, 15));
+  assert.equal(nextAligned(D(10, 15), 15), D(10, 30)); // strictly after
+  assert.equal(nextAligned(D(23, 50), 15), D(24, 0)); // into the next day
+  assert.equal(nextAligned(D(10, 7), 60), D(11, 0));
+  assert.equal(nextAligned(D(10, 7), 30, 150_000), D(10, 32, 30)); // moved by 2:30
+  assert.equal(nextAligned(D(23, 55), 7), D(24, 0)); // 7 does not divide the day: the grid restarts at midnight
+  // fixed times, on the chosen days (Monday to Friday)
+  const plan = { mode: 'times', times: ['06:30', '18:45'], days: [1, 2, 3, 4, 5] };
+  assert.equal(nextTime(D(5), plan), D(6, 30));
+  assert.equal(nextTime(D(7), plan), D(18, 45));
+  assert.equal(nextTime(D(19), plan), D(6, 30, 0, 6)); // tomorrow
+  assert.equal(nextTime(D(19, 0, 0, 9), plan), D(6, 30, 0, 12)); // Friday evening: next Monday
+  assert.equal(lastTime(D(7), plan), D(6, 30));
+  assert.equal(lastTime(D(5), plan), D(18, 45, 0, 2)); // before the first time of the day: yesterday's last one (Friday 2 Oct)
+  assert.equal(nextTime(D(7), { times: ['xx'], days: [1] }), null);
+});
+
+test('scheduler: every N minutes on the clock waits for the next slot and keeps to it', async () => {
+  let t = D(10, 7);
+  const { timers, setTimer, clearTimer } = fakeTimers();
+  const runs = [];
+  const profiles = [{ id: 'p', enabled: true, intervalMin: 15, feeds: [], plan: { mode: 'aligned' } }];
+  const s = createScheduler({ getProfiles: () => profiles, run: async (p, o) => { runs.push([t, o]); }, now: () => t, setTimer, clearTimer });
+  s.start({ immediately: false });
+  assert.equal(timers[0].ms, 8 * 60_000); // 10:07 -> 10:15
+  t = D(10, 15);
+  await timers.shift().fn();
+  assert.equal(runs.length, 1);
+  assert.equal(timers[0].ms, 15 * 60_000); // 10:15 -> 10:30
+  s.stop();
+});
+
+test('scheduler: fixed times, missed time made up at start-up only when the last check is older, all feeds due', async () => {
+  const profiles = [{ id: 'p', enabled: true, intervalMin: 5, feeds: [], plan: { mode: 'times', times: ['06:30', '18:45'], days: [0, 1, 2, 3, 4, 5, 6] } }];
+  const runOf = async (last, immediately = true) => {
+    const t = D(19, 0); // after 18:45
+    const { timers, setTimer, clearTimer } = fakeTimers();
+    const runs = [];
+    const s = createScheduler({ getProfiles: () => profiles, run: async (p, o) => runs.push(o), now: () => t, setTimer, clearTimer, getLastCheck: () => last });
+    s.start({ immediately });
+    const first = timers[0].ms;
+    await timers[0].fn();
+    s.stop();
+    return { first, runs };
+  };
+  const missed = await runOf(D(18, 0)); // last check before 18:45: made up now
+  assert.equal(missed.first, 0);
+  assert.deepEqual(missed.runs, [{ force: false, all: true }]);
+  const fresh = await runOf(D(18, 50)); // already checked after 18:45: wait for tomorrow 06:30
+  assert.equal(fresh.first, 11.5 * 3600_000);
+  const never = await runOf(0, false); // "run at launch" off: no make-up
+  assert.equal(never.first, 11.5 * 3600_000);
+});
+
+test('scheduler: clock-based plans skip a slot outside the time windows', async () => {
+  let t = D(3, 0, 0);
+  const { timers, setTimer, clearTimer } = fakeTimers();
+  const runs = [];
+  const profiles = [{ id: 'p', enabled: true, intervalMin: 30, feeds: [], plan: { mode: 'aligned' }, schedule: { enabled: true, windows: [{ days: [], from: '06:00', to: '24:00', intervalMin: 0 }] } }];
+  const s = createScheduler({ getProfiles: () => profiles, run: async () => runs.push(t), now: () => t, setTimer, clearTimer });
+  s.start({ immediately: true });
+  await timers.shift().fn(); // 03:00, window closed: nothing runs
+  assert.equal(runs.length, 0);
+  assert.equal(timers[0].ms, 30 * 60_000); // simply the next slot, not "when the window opens"
+  s.stop();
+});
+
+test('stagger: profiles sharing an interval are spread inside it, in list order; off by default', () => {
+  const mk = (stagger) => {
+    const t = D(10, 0);
+    const { timers, setTimer, clearTimer } = fakeTimers();
+    const profiles = [1, 2, 3].map((i) => ({ id: 'p' + i, enabled: true, intervalMin: 5, feeds: [], plan: { mode: 'interval' } }));
+    profiles.push({ id: 'other', enabled: true, intervalMin: 10, feeds: [], plan: { mode: 'interval' } }); // alone in its group
+    const s = createScheduler({ getProfiles: () => profiles, run: async () => {}, now: () => t, setTimer, clearTimer, getStagger: () => stagger });
+    s.start({ immediately: true });
+    return timers.map((x) => x.ms);
+  };
+  assert.deepEqual(mk(false), [0, 0, 0, 0]); // the old behaviour: everything at once
+  assert.deepEqual(mk(true), [0, 100_000, 200_000, 0]); // 5 min / 3 = 1:40 apart
+  // clock-aligned plans keep the shift at every slot
+  const t = D(10, 0, 1);
+  const { timers, setTimer, clearTimer } = fakeTimers();
+  const profiles = [1, 2].map((i) => ({ id: 'a' + i, enabled: true, intervalMin: 5, feeds: [], plan: { mode: 'aligned' } }));
+  const s = createScheduler({ getProfiles: () => profiles, run: async () => {}, now: () => t, setTimer, clearTimer, getStagger: () => true });
+  s.start({ immediately: false });
+  assert.equal(timers[0].ms, 299_000); // 10:05:00
+  assert.equal(timers[1].ms, 149_000); // 10:02:30
+  s.stop();
+});
+
+test('settings: the plan and the stagger option are cleaned; old settings get the old behaviour', () => {
+  const old = sanitizeSettings({ profiles: [{ name: 'A', intervalMin: 5 }] });
+  assert.equal(old.profiles[0].plan.mode, 'interval');
+  assert.equal(old.general.staggerProfiles, false);
+  const p = sanitizeProfile({ name: 'B', plan: { mode: 'times', times: '6:30, 18:45; 25:00, x, 06:30', days: [1, 9, 3] } });
+  assert.deepEqual(p.plan, { mode: 'times', times: ['06:30', '18:45'], days: [1, 3] });
+  assert.equal(sanitizeProfile({ name: 'C', plan: { mode: 'nonsense' } }).plan.mode, 'interval');
+  assert.deepEqual(sanitizeProfile({ name: 'D', plan: { mode: 'times', times: [], days: [] } }).plan, { mode: 'times', times: ['08:00'], days: [0, 1, 2, 3, 4, 5, 6] });
+});
+
+test('fixed times: every enabled feed is checked (own intervals ignored); last check known after a restart', async () => {
+  const out = await tmp();
+  const stateFile = path.join(await tmp(), 'state.json');
+  const calls = [];
+  const feed = mkFeed({ id: 'f1', intervalMin: 60 }); // would normally be checked once an hour
+  const profile = sanitizeProfile({ ...newProfile('Radio'), outputDir: out, feeds: [feed], plan: { mode: 'times', times: ['06:30'], days: [] } });
+  const settings = sanitizeSettings({ profiles: [profile] });
+  const prof = settings.profiles[0];
+  let t = D(7, 0);
+  const mk = () => createRuntime({ getSettings: () => settings, stateFile, builtinPlaceholder: async () => PNG, now: () => t, deps: { engine: { get: async (url) => { calls.push(url); return { status: 200, body: Buffer.from(RSS(item('A', 'a'))), url, headers: {} }; }, retryDelayMs: 1 } } });
+  const rt = mk();
+  assert.equal(rt.engine.lastCheckAt(prof.id), 0);
+  await rt.engine.runProfile(prof, () => {});
+  assert.equal(calls.length, 1);
+  t += 600_000; // ten minutes later: not due for its hourly interval...
+  await rt.engine.runProfile(prof, () => {});
+  assert.equal(calls.length, 1);
+  await rt.engine.runProfile(prof, () => {}, { all: true }); // ...but a fixed time checks it anyway
+  assert.equal(calls.length, 2);
+  assert.ok(rt.engine.lastCheckAt(prof.id) >= D(7, 10));
+  rt.dispose();
+  const rt2 = mk(); // restart: the remembered state still says when the profile was last checked
+  rt2.loadState();
+  assert.ok(rt2.engine.lastCheckAt(prof.id) > 0);
+  rt2.dispose();
 });
