@@ -17,6 +17,7 @@ const M = {
     digestStale: (f, h) => `  ⏸ ${f}: no new stories for ${h} h`,
     digestAllOk: 'Everything is working.',
     digestDisabled: 'disabled',
+    update: (v, cur, url) => `A new version of Ticker Feed Builder is available: ${v} (installed: ${cur}). ${url}`,
     emailIncomplete: 'Email is not set up: an SMTP server, a sender and at least one valid recipient are needed.',
     emailFailed: 'Email: ',
     tgFailed: 'Telegram: '
@@ -38,6 +39,7 @@ const M = {
     digestStale: (f, h) => `  ⏸ ${f}: nessuna notizia nuova da ${h} h`,
     digestAllOk: 'Tutto funziona.',
     digestDisabled: 'disattivato',
+    update: (v, cur, url) => `È disponibile una nuova versione di Ticker Feed Builder: ${v} (installata: ${cur}). ${url}`,
     emailIncomplete: 'L\'email non è configurata: servono un server SMTP, un mittente e almeno un destinatario valido.',
     emailFailed: 'Email: ',
     tgFailed: 'Telegram: '
@@ -59,6 +61,7 @@ const M = {
     digestStale: (f, h) => `  ⏸ ${f}: sin noticias nuevas desde hace ${h} h`,
     digestAllOk: 'Todo funciona.',
     digestDisabled: 'desactivado',
+    update: (v, cur, url) => `Hay una nueva versión de Ticker Feed Builder: ${v} (instalada: ${cur}). ${url}`,
     emailIncomplete: 'El correo no está configurado: hacen falta un servidor SMTP, un remitente y al menos un destinatario válido.',
     emailFailed: 'Correo: ',
     tgFailed: 'Telegram: '

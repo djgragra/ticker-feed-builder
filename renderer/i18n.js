@@ -33,6 +33,8 @@ const TEXTS = {
     'rail.profiles': 'Profiles', 'rail.new': '+ New profile',
     'top.running': 'Schedules running', 'top.paused': 'Schedules paused', 'top.feedsOk': '{n} feeds OK', 'top.feedsBad': '{n} with problems', 'top.noProfiles': 'No profiles yet',
     'top.pause': 'Pause schedules', 'top.resume': 'Resume schedules',
+    'state.ok': 'OK', 'state.warn': 'Partial', 'state.bad': 'Problem', 'state.run': 'Running', 'state.wait': 'Waiting', 'state.off': 'Off', 'rail.updated': 'updated {time}',
+    'dash.history': 'Last checks', 'hist.changed': 'new stories', 'hist.same': 'no change', 'hist.fail': 'failed', 'test.tickerTitle': 'As on the ticker',
     'help.open': 'How it works', 'help.title': 'How Ticker Feed Builder works', 'settings.open': 'Settings', 'settings.title': 'Settings',
     'new.title': 'New profile', 'new.name': 'Profile name', 'new.defaultName': 'Profile', 'new.create': 'Create',
     'empty.title': 'No profile yet', 'empty.text': 'A profile is one destination: an output folder, a list of RSS feeds and how often to refresh them. Create one to start.', 'empty.create': 'Create the first profile',
@@ -58,7 +60,7 @@ const TEXTS = {
     's.general': 'General', 's.startOnBoot': 'Start the app when the computer starts', 's.startMinimized': 'Start hidden in the tray', 's.runOnLaunch': 'Start the schedules when the app opens', 's.keepAwake': 'Keep the computer awake (a sleeping computer cannot update the ticker)', 's.logDays': 'Keep log files for', 's.days': 'days',
     's.alerts': 'Alerts', 's.desktop': 'Desktop notification', 's.threshold': 'Alert after', 's.failures': 'failed runs in a row', 's.alertsHint': 'You are alerted when a feed fails the number of runs set above, when its output folder disappears (for example an unplugged drive or network share), and when it works again.',
     's.backup': 'Settings backup', 's.export': 'Export settings…', 's.import': 'Import settings…', 's.importOk': 'Settings imported.', 's.exported': 'Saved: {f}', 's.backupNote': 'The file contains profiles, feed lists and formats, not the Telegram token or the email password.',
-    's.updates': 'Updates', 's.checkUpdates': 'Check GitHub for new versions', 's.checkNow': 'Check now', 's.upToDate': 'You have the latest version.', 's.noRelease': 'No release published yet.', 's.updateErr': 'Could not check: {e}',
+    's.updates': 'Updates', 's.checkUpdates': 'Check GitHub for new versions', 's.updateAlert': 'Tell me about a new version on Telegram / email (once per version; needs a channel switched on)', 's.checkNow': 'Check now', 's.upToDate': 'You have the latest version.', 's.noRelease': 'No release published yet.', 's.updateErr': 'Could not check: {e}',
     'update.available': 'Version {v} is available (you have {c}).', 'update.download': 'Download', 'update.notes': 'Release page', 'update.progress': 'Downloading… {p}%', 'update.done': 'Downloaded: {f}', 'update.reveal': 'Show file', 'update.err': 'Download failed: {e}',
     'err.openFolder': 'Cannot open the folder.'
   },
@@ -94,6 +96,8 @@ const TEXTS = {
     'rail.profiles': 'Profili', 'rail.new': '+ Nuovo profilo',
     'top.running': 'Pianificazioni attive', 'top.paused': 'Pianificazioni in pausa', 'top.feedsOk': '{n} feed OK', 'top.feedsBad': '{n} con problemi', 'top.noProfiles': 'Nessun profilo',
     'top.pause': 'Metti in pausa', 'top.resume': 'Riprendi',
+    'state.ok': 'OK', 'state.warn': 'Parziale', 'state.bad': 'Problema', 'state.run': 'In corso', 'state.wait': 'In attesa', 'state.off': 'Spento', 'rail.updated': 'agg. {time}',
+    'dash.history': 'Ultimi controlli', 'hist.changed': 'novità', 'hist.same': 'nessun cambiamento', 'hist.fail': 'fallito', 'test.tickerTitle': 'Come sul ticker',
     'help.open': 'Come funziona', 'help.title': 'Come funziona Ticker Feed Builder', 'settings.open': 'Impostazioni', 'settings.title': 'Impostazioni',
     'new.title': 'Nuovo profilo', 'new.name': 'Nome del profilo', 'new.defaultName': 'Profilo', 'new.create': 'Crea',
     'empty.title': 'Nessun profilo', 'empty.text': 'Un profilo è una destinazione: una cartella di output, un elenco di feed RSS e ogni quanto aggiornarli. Creane uno per iniziare.', 'empty.create': 'Crea il primo profilo',
@@ -119,7 +123,7 @@ const TEXTS = {
     's.general': 'Generali', 's.startOnBoot': 'Avvia l\'app all\'accensione del computer', 's.startMinimized': 'Avvia nascosta nella barra di sistema', 's.runOnLaunch': 'Avvia le pianificazioni all\'apertura dell\'app', 's.keepAwake': 'Tieni il computer sveglio (un computer in stop non aggiorna il ticker)', 's.logDays': 'Conserva i file di log per', 's.days': 'giorni',
     's.alerts': 'Avvisi', 's.desktop': 'Notifica sul desktop', 's.threshold': 'Avvisa dopo', 's.failures': 'giri falliti di fila', 's.alertsHint': 'Ricevi un avviso quando un feed fallisce il numero di giri indicato sopra, quando la sua cartella di output sparisce (ad esempio disco o condivisione di rete scollegati) e quando torna a funzionare.',
     's.backup': 'Copia delle impostazioni', 's.export': 'Esporta impostazioni…', 's.import': 'Importa impostazioni…', 's.importOk': 'Impostazioni importate.', 's.exported': 'Salvato: {f}', 's.backupNote': 'Il file contiene profili, elenchi di feed e formati, non il token Telegram né la password email.',
-    's.updates': 'Aggiornamenti', 's.checkUpdates': 'Controlla su GitHub le nuove versioni', 's.checkNow': 'Controlla ora', 's.upToDate': 'Hai l\'ultima versione.', 's.noRelease': 'Nessuna versione pubblicata.', 's.updateErr': 'Controllo non riuscito: {e}',
+    's.updates': 'Aggiornamenti', 's.checkUpdates': 'Controlla su GitHub le nuove versioni', 's.updateAlert': 'Avvisami di una nuova versione su Telegram / email (una volta per versione; serve un canale attivo)', 's.checkNow': 'Controlla ora', 's.upToDate': 'Hai l\'ultima versione.', 's.noRelease': 'Nessuna versione pubblicata.', 's.updateErr': 'Controllo non riuscito: {e}',
     'update.available': 'È disponibile la versione {v} (hai la {c}).', 'update.download': 'Scarica', 'update.notes': 'Pagina della versione', 'update.progress': 'Scaricamento… {p}%', 'update.done': 'Scaricato: {f}', 'update.reveal': 'Mostra file', 'update.err': 'Scaricamento non riuscito: {e}',
     'err.openFolder': 'Impossibile aprire la cartella.'
   },
@@ -155,6 +159,8 @@ const TEXTS = {
     'rail.profiles': 'Perfiles', 'rail.new': '+ Nuevo perfil',
     'top.running': 'Programaciones activas', 'top.paused': 'Programaciones en pausa', 'top.feedsOk': '{n} feeds OK', 'top.feedsBad': '{n} con problemas', 'top.noProfiles': 'Aún no hay perfiles',
     'top.pause': 'Pausar', 'top.resume': 'Reanudar',
+    'state.ok': 'OK', 'state.warn': 'Parcial', 'state.bad': 'Problema', 'state.run': 'En curso', 'state.wait': 'En espera', 'state.off': 'Apagado', 'rail.updated': 'act. {time}',
+    'dash.history': 'Últimas comprobaciones', 'hist.changed': 'novedades', 'hist.same': 'sin cambios', 'hist.fail': 'falló', 'test.tickerTitle': 'Como en el ticker',
     'help.open': 'Cómo funciona', 'help.title': 'Cómo funciona Ticker Feed Builder', 'settings.open': 'Ajustes', 'settings.title': 'Ajustes',
     'new.title': 'Nuevo perfil', 'new.name': 'Nombre del perfil', 'new.defaultName': 'Perfil', 'new.create': 'Crear',
     'empty.title': 'Aún no hay perfiles', 'empty.text': 'Un perfil es un destino: una carpeta de salida, una lista de feeds RSS y cada cuánto actualizarlos. Crea uno para empezar.', 'empty.create': 'Crear el primer perfil',
@@ -180,7 +186,7 @@ const TEXTS = {
     's.general': 'General', 's.startOnBoot': 'Iniciar la app al arrancar el ordenador', 's.startMinimized': 'Iniciar oculta en la bandeja', 's.runOnLaunch': 'Iniciar las programaciones al abrir la app', 's.keepAwake': 'Mantener el ordenador despierto (un ordenador suspendido no actualiza el ticker)', 's.logDays': 'Conservar los archivos de log durante', 's.days': 'días',
     's.alerts': 'Alertas', 's.desktop': 'Notificación de escritorio', 's.threshold': 'Avisar tras', 's.failures': 'ejecuciones fallidas seguidas', 's.alertsHint': 'Recibes un aviso cuando un feed falla el número de ejecuciones indicado arriba, cuando desaparece su carpeta de salida (por ejemplo un disco o recurso de red desconectado) y cuando vuelve a funcionar.',
     's.backup': 'Copia de los ajustes', 's.export': 'Exportar ajustes…', 's.import': 'Importar ajustes…', 's.importOk': 'Ajustes importados.', 's.exported': 'Guardado: {f}', 's.backupNote': 'El archivo contiene perfiles, listas de feeds y formatos, ni el token de Telegram ni la contraseña del correo.',
-    's.updates': 'Actualizaciones', 's.checkUpdates': 'Buscar nuevas versiones en GitHub', 's.checkNow': 'Buscar ahora', 's.upToDate': 'Tienes la última versión.', 's.noRelease': 'Aún no hay versiones publicadas.', 's.updateErr': 'No se pudo comprobar: {e}',
+    's.updates': 'Actualizaciones', 's.checkUpdates': 'Buscar nuevas versiones en GitHub', 's.updateAlert': 'Avisarme de una nueva versión por Telegram / correo (una vez por versión; hace falta un canal activo)', 's.checkNow': 'Buscar ahora', 's.upToDate': 'Tienes la última versión.', 's.noRelease': 'Aún no hay versiones publicadas.', 's.updateErr': 'No se pudo comprobar: {e}',
     'update.available': 'Hay una versión nueva: {v} (tienes la {c}).', 'update.download': 'Descargar', 'update.notes': 'Página de la versión', 'update.progress': 'Descargando… {p}%', 'update.done': 'Descargado: {f}', 'update.reveal': 'Mostrar archivo', 'update.err': 'Error al descargar: {e}',
     'err.openFolder': 'No se puede abrir la carpeta.'
   }

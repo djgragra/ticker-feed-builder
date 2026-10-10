@@ -35,6 +35,34 @@ function h(tag, attrs, ...kids) {
   return el;
 }
 
+// ---- small line icons (inline SVG, drawn with DOM calls: no innerHTML, no inline styles) --------------
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const ICONS = {
+  play: 'M7 5l12 7-12 7z',
+  folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  edit: 'M4 20h4L19 9l-4-4L4 16zM13 7l4 4',
+  eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+  sliders: 'M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1',
+  x: 'M6 6l12 12M18 6L6 18',
+  clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
+  check: 'M5 12l5 5 9-10',
+  alert: 'M12 4l9 16H3zM12 10v4M12 17v.01',
+  pulse: 'M3 12h4l3-8 4 16 3-8h4',
+  layers: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5',
+  pause: 'M8 5v14M16 5v14'
+};
+function icon(name, size = 16) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: size, height: size, fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', class: 'ico' })) svg.setAttribute(k, v);
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', ICONS[name]);
+  svg.append(path);
+  return svg;
+}
+// the state of a profile or feed in words (colour alone is not enough for everybody)
+const STATE_KEY = { ok: 'state.ok', warn: 'state.warn', bad: 'state.bad', run: 'state.run', '': 'state.wait' };
+const hue = (text) => { let n = 0; for (const c of String(text)) n = (n * 31 + c.charCodeAt(0)) % 6; return n; };
+
 const curProfile = () => state.settings.profiles.find((p) => p.id === state.sel) || null;
 const fmtTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const fmtDateTime = (ms) => new Date(ms).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' });
@@ -82,6 +110,14 @@ function dashLed() {
   return leds.includes('bad') ? 'bad' : leds.includes('warn') ? 'warn' : leds.includes('run') ? 'run' : leds.includes('ok') ? 'ok' : '';
 }
 
+// the last time a file of this profile was really rewritten
+function profileUpdated(p) {
+  const st = state.status.profiles[p.id];
+  let last = 0;
+  for (const f of p.feeds) { const r = st?.feeds?.[f.id]; if (r?.changedAt) last = Math.max(last, r.changedAt); }
+  return last;
+}
+
 function renderRail() {
   const ul = $('#profileList');
   const list = state.settings.profiles;
@@ -103,7 +139,10 @@ function renderRail() {
           ondrop: (e) => { e.preventDefault(); const from = e.dataTransfer.getData('text/plain'); const before = dropBefore(e); clearDropMarks(); dropProfile(from, p.id, before); }
         },
         h('span', { class: 'led ' + profileLed(p) }),
-        h('div', { class: 'pname' }, p.name, h('div', { class: 'psub' }, `${p.feeds.filter((f) => f.enabled).length}/${p.feeds.length} feeds · ${p.intervalMin} min`)),
+        h('div', { class: 'pname' },
+          h('div', { class: 'pline' }, h('span', { class: 'ptitle', text: p.name }), h('span', { class: 'pstate ' + (p.enabled ? profileLed(p) : 'off'), text: t(p.enabled ? STATE_KEY[profileLed(p)] : 'state.off') })),
+          h('div', { class: 'psub' }, `${p.feeds.filter((f) => f.enabled).length}/${p.feeds.length} feeds · ${p.intervalMin} min`),
+          profileUpdated(p) ? h('div', { class: 'psub' }, t('rail.updated', { time: fmtTime(profileUpdated(p)) })) : null),
         h('div', { class: 'mv' },
           h('button', { class: 'mvb', title: t('rail.up'), 'aria-label': t('rail.up'), disabled: i === 0, onclick: (e) => { e.stopPropagation(); moveProfile(p.id, -1); } }, '▲'),
           h('button', { class: 'mvb', title: t('rail.down'), 'aria-label': t('rail.down'), disabled: i === list.length - 1, onclick: (e) => { e.stopPropagation(); moveProfile(p.id, 1); } }, '▼')));
@@ -153,9 +192,11 @@ function renderTop() {
   }
   const active = state.status.active;
   const box = $('#topStatus');
+  const level = !state.settings.profiles.length ? '' : bad ? 'bad' : active ? 'ok' : 'warn';
   box.replaceChildren(...[
-    h('span', { class: 'led ' + (state.settings.profiles.length ? (active ? 'ok' : 'warn') : '') }),
-    h('span', {}, state.settings.profiles.length ? (active ? t('top.running') : t('top.paused')) : t('top.noProfiles')),
+    h('span', { class: 'status-pill ' + level, role: 'status' },
+      h('span', { class: 'led ' + (state.settings.profiles.length ? (active ? 'ok' : 'warn') : '') }),
+      h('span', {}, state.settings.profiles.length ? (active ? t('top.running') : t('top.paused')) : t('top.noProfiles'))),
     ok || bad ? h('span', { class: 'badge' }, t('top.feedsOk', { n: ok })) : null,
     bad ? h('span', { class: 'badge bad' }, t('top.feedsBad', { n: bad })) : null
   ].filter(Boolean));
@@ -170,12 +211,20 @@ function select(id) {
 }
 
 // ---- main panel ---------------------------------------------------------------------------------
+// nothing yet: the logo drawn large, what a profile is, one big button
+function emptyState() {
+  return h('div', { class: 'empty' },
+    h('img', { class: 'empty-logo', src: 'logo.svg', alt: '', width: 96, height: 96 }),
+    h('h2', { text: t('empty.title') }), h('p', { text: t('empty.text') }),
+    h('button', { class: 'btn primary big', onclick: openNewDialog, text: t('empty.create') }));
+}
+
 function renderMain() {
   const main = $('#main');
   if (state.view === 'dash') return renderDashboard();
   const p = curProfile();
   if (!p) {
-    main.replaceChildren(h('div', { class: 'empty' }, h('h2', { text: t('empty.title') }), h('p', { text: t('empty.text') }), h('button', { class: 'btn primary', onclick: openNewDialog, text: t('empty.create') })));
+    main.replaceChildren(emptyState());
     return;
   }
   const change = () => saveProfile(p);
@@ -230,7 +279,9 @@ function feedsTab(p, change) {
     const merge = f.type === 'merge';
     return h('tr', {},
       h('td', {}, h('input', { type: 'checkbox', checked: f.enabled, 'aria-label': t('f.on'), onchange: (e) => { f.enabled = e.target.checked; change(); } })),
-      h('td', {}, h('input', { type: 'text', value: f.folder, maxLength: 100, 'aria-label': t('f.folder'), onchange: (e) => { f.folder = e.target.value; change(); } })),
+      h('td', {}, h('div', { class: 'fcell' },
+        h('span', { class: 'avatar hue' + hue(f.folder), 'aria-hidden': 'true', text: (f.folder || '?').trim().charAt(0).toUpperCase() || '?' }),
+        h('input', { type: 'text', value: f.folder, maxLength: 100, 'aria-label': t('f.folder'), onchange: (e) => { f.folder = e.target.value; change(); } }))),
       h('td', { class: 'url' }, merge
         ? h('span', { class: 'hint', text: f.sources.length ? t('f.mergeOf', { names: f.sources.map(nameOf).join(', ') }) : t('f.mergeNone') })
         : h('input', { type: 'url', value: f.url, spellcheck: false, placeholder: 'https://…', 'aria-label': t('f.url'), onchange: (e) => { f.url = e.target.value.trim(); change(); } })),
@@ -239,9 +290,9 @@ function feedsTab(p, change) {
       h('td', {}, merge ? null : h('input', { type: 'checkbox', checked: f.insecureTls, 'aria-label': t('f.tls'), title: t('f.tlsHint'), onchange: (e) => { f.insecureTls = e.target.checked; change(); } })),
       h('td', { class: 'st', 'data-feed': f.id }),
       h('td', {}, h('div', { class: 'row-actions' },
-        h('button', { class: 'btn small', text: t('f.options'), onclick: () => openFeedDialog(p, f, change) }),
-        h('button', { class: 'btn small', text: t('f.test'), onclick: () => testFeed(f, p) }),
-        h('button', { class: 'btn small', text: '×', title: t('f.remove'), 'aria-label': t('f.remove'), onclick: () => { p.feeds = p.feeds.filter((x) => x.id !== f.id); for (const m of p.feeds) m.sources = (m.sources || []).filter((sid) => sid !== f.id); change(); renderMain(); } })))
+        h('button', { class: 'btn small icon-btn', title: t('f.options'), 'aria-label': t('f.options'), onclick: () => openFeedDialog(p, f, change) }, icon('sliders')),
+        h('button', { class: 'btn small icon-btn', title: t('f.test'), 'aria-label': t('f.test'), onclick: () => testFeed(f, p) }, icon('eye')),
+        h('button', { class: 'btn small icon-btn danger', title: t('f.remove'), 'aria-label': t('f.remove'), onclick: () => { p.feeds = p.feeds.filter((x) => x.id !== f.id); for (const m of p.feeds) m.sources = (m.sources || []).filter((sid) => sid !== f.id); change(); renderMain(); } }, icon('x'))))
     );
   });
   const addFeed = (type) => { p.feeds.push({ id: crypto.randomUUID(), type, folder: type === 'merge' ? 'Latest' : `Feed${p.feeds.length + 1}`, url: '', sources: type === 'merge' ? p.feeds.filter((x) => x.type === 'feed').map((x) => x.id) : [], maxItems: type === 'merge' ? 15 : 10, intervalMin: 0, staleHours: 0, filters: { include: [], exclude: [], scope: 'both', sort: 'feed', dedupe: false }, enabled: true, insecureTls: false }); change(); renderMain(); };
@@ -289,6 +340,16 @@ function openFeedDialog(p, f, change) {
 }
 
 // ---- preview ("as it would be written") ---------------------------------------------------------------
+// the headlines in a row, scrolling like on air (stops when the system asks for less motion)
+function tickerStrip(items) {
+  const lines = items.map((it) => it.titleLine).filter(Boolean);
+  if (!lines.length) return null;
+  const track = (hidden) => h('span', { class: 'ticker-seg', 'aria-hidden': hidden ? 'true' : null }, lines.map((l) => h('span', { class: 'ticker-item', text: l })));
+  return h('div', { class: 'ticker', role: 'group', 'aria-label': t('test.tickerTitle') },
+    h('span', { class: 'ticker-tag', text: t('test.tickerTitle') }),
+    h('div', { class: 'ticker-view' }, h('div', { class: 'ticker-track' }, track(false), track(true))));
+}
+
 async function testFeed(f, p, raw = false) {
   const body = $('#testBody');
   body.replaceChildren(h('p', { text: t('test.loading') }));
@@ -298,6 +359,7 @@ async function testFeed(f, p, raw = false) {
   body.replaceChildren(
     f.type === 'merge' ? null : h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: raw, onchange: (e) => testFeed(f, p, e.target.checked) }), h('span', { text: t('test.raw') })),
     h('p', { class: 'hint', text: raw ? t('test.rawSummary', { total: r.total, m: r.items.length }) : t('test.summary', { sel: r.selected, total: r.total, removed: r.removed }) }),
+    tickerStrip(r.items),
     h('div', { class: 'tgrid' }, r.items.map((it) =>
       h('div', { class: 'tcard' },
         h('div', { class: 'thumb' }, it.thumb ? h('img', { src: it.thumb, alt: '' }) : t('test.noImage')),
@@ -396,11 +458,11 @@ function logTab() {
 const staleOf = (p, f, r) => { const hrs = (f && f.staleHours) || (p && p.staleHours) || 0; return hrs && r?.ok && r.changedAt && Date.now() - r.changedAt > hrs * 3_600_000 ? Math.floor((Date.now() - r.changedAt) / 3_600_000) : 0; };
 
 function feedStatusNodes(r, feed, p) {
-  if (!r) return [h('span', { class: 'time', text: feed && feed.type !== 'merge' && !feed.url ? t('f.noUrl') : t('f.never') })];
-  if (!r.ok) return [h('span', { class: 'led bad' }), ' ', h('span', { class: 'bad-text', text: r.error }), ' ', h('span', { class: 'time', text: fmtDateTime(r.at) })];
+  if (!r) return [h('span', { class: 'pill off', text: feed && feed.type !== 'merge' && !feed.url ? t('f.noUrl') : t('f.never') })];
+  if (!r.ok) return [h('span', { class: 'pill bad' }, icon('alert', 13), h('span', { class: 'bad-text', text: r.error })), ' ', h('span', { class: 'time', text: fmtDateTime(r.at) })];
   const text = (r.unchanged ? t('f.unchanged', { items: r.items }) : t('f.stat', { items: r.items, img: r.imagesOriginal, ph: r.placeholders })) + (r.filteredOut ? ` · ${t('f.leftOut', { n: r.filteredOut })}` : '');
   const quiet = staleOf(p, feed, r);
-  return [h('span', { class: 'led ' + (quiet ? 'warn' : 'ok') }), ' ', text, ' ', h('span', { class: 'time', text: fmtDateTime(r.at) }), ...(quiet ? [h('div', {}, h('span', { class: 'badge bad', text: t('f.staleBadge', { h: quiet }) }))] : [])];
+  return [h('span', { class: 'pill ' + (quiet ? 'warn' : 'ok') }, icon(quiet ? 'clock' : 'check', 13), text), ' ', h('span', { class: 'time', text: fmtDateTime(r.at) }), ...(quiet ? [h('div', {}, h('span', { class: 'badge bad', text: t('f.staleBadge', { h: quiet }) }))] : [])];
 }
 
 function refreshDynamic() {
@@ -427,6 +489,10 @@ function tickCountdown() {
   for (const el of document.querySelectorAll('[data-until]')) {
     const ms = Number(el.getAttribute('data-until')) - Date.now();
     el.textContent = ms > 0 ? mmss(ms) : t('dash.now');
+  }
+  for (const el of document.querySelectorAll('[data-bar-until]')) {
+    const span = Number(el.getAttribute('data-bar-span')) || 1;
+    el.value = Math.round(1000 * Math.min(1, Math.max(0, 1 - (Number(el.getAttribute('data-bar-until')) - Date.now()) / span)));
   }
   const clock = $('#dashClock');
   if (clock) clock.textContent = new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'medium' });
@@ -464,11 +530,19 @@ function upcomingChecks() {
   return out.sort((a, b) => (typeof a.when === 'number' ? a.when : Infinity) - (typeof b.when === 'number' ? b.when : Infinity));
 }
 
+// the last checks of a feed as small bars: new stories / no change / failed (and the same in words, for the tooltip)
+function historyStrip(list) {
+  if (!list || !list.length) return h('span', { class: 'time', text: '—' });
+  const word = (x) => (!x.ok ? t('hist.fail') : x.changed ? t('hist.changed') : t('hist.same'));
+  return h('span', { class: 'hist', role: 'img', 'aria-label': t('dash.history') + ': ' + list.map(word).join(', ') },
+    list.map((x) => h('span', { class: 'hb ' + (!x.ok ? 'bad' : x.changed ? 'ok' : 'same'), title: `${fmtTime(x.at)} · ${word(x)}` })));
+}
+
 function renderDashboard() {
   const main = $('#main');
   const profiles = state.settings.profiles;
   if (!profiles.length) {
-    main.replaceChildren(h('div', { class: 'empty' }, h('h2', { text: t('empty.title') }), h('p', { text: t('empty.text') }), h('button', { class: 'btn primary', onclick: openNewDialog, text: t('empty.create') })));
+    main.replaceChildren(emptyState());
     return;
   }
   let ok = 0, bad = 0, lastChange = 0;
@@ -483,7 +557,7 @@ function renderDashboard() {
   }
   const up = upcomingChecks();
   const first = up.find((u) => typeof u.when === 'number');
-  const tile = (label, value, cls, extra) => h('div', { class: 'tile ' + (cls || '') }, h('div', { class: 'tile-label', text: label }), h('div', { class: 'tile-value' }, value), extra || null);
+  const tile = (label, value, cls, extra, ico) => h('div', { class: 'tile ' + (cls || '') }, h('div', { class: 'tile-label' }, ico ? icon(ico, 14) : null, label), h('div', { class: 'tile-value' }, value), extra || null);
 
   const card = (p) => {
     const st = state.status.profiles[p.id] || { feeds: {} };
@@ -492,9 +566,10 @@ function renderDashboard() {
       const r = st.feeds?.[f.id];
       return h('tr', {},
         h('td', {}, h('span', { class: 'led ' + (!r ? '' : r.ok ? 'ok' : 'bad') }), ' ', f.folder),
-        h('td', { class: 'st' }, ...(r ? (r.ok ? [(r.unchanged ? t('f.unchanged', { items: r.items }) : t('f.stat', { items: r.items, img: r.imagesOriginal, ph: r.placeholders })) + (r.filteredOut ? ` · ${t('f.leftOut', { n: r.filteredOut })}` : ''), staleOf(p, f, r) ? h('span', { class: 'badge bad', text: t('f.staleBadge', { h: staleOf(p, f, r) }) }) : null] : [h('span', { class: 'bad-text', text: r.error })]) : [h('span', { class: 'time', text: t('dash.pending') })])),
+        h('td', { class: 'st' }, ...(r ? feedStatusNodes(r, f, p) : [h('span', { class: 'pill off', text: t('dash.pending') })]).filter((n) => !(n instanceof Element && n.classList.contains('time')) && n !== ' ')),
         h('td', { class: 'time', text: r ? fmtDateTime(r.at) : '—' }),
-        h('td', { class: 'time', text: r?.changedAt ? fmtDateTime(r.changedAt) : '—' }));
+        h('td', { class: 'time', text: r?.changedAt ? fmtDateTime(r.changedAt) : '—' }),
+        h('td', {}, historyStrip(st.history?.[f.id])));
     });
     return h('section', { class: 'dcard' },
       h('div', { class: 'dcard-head' },
@@ -508,7 +583,7 @@ function renderDashboard() {
       h('div', { class: 'path', text: p.outputDir || t('p.outputPh') }),
       dirDown ? h('div', { class: 'alert-line', text: t('dash.dirMissing') }) : null,
       rows.length
-        ? h('table', { class: 'feeds dtable' }, h('thead', {}, h('tr', {}, ...['dash.feed', 'dash.status', 'dash.checked', 'dash.updated'].map((k) => h('th', { text: t(k) })))), h('tbody', {}, rows))
+        ? h('table', { class: 'feeds dtable' }, h('thead', {}, h('tr', {}, ...['dash.feed', 'dash.status', 'dash.checked', 'dash.updated', 'dash.history'].map((k) => h('th', { text: t(k) })))), h('tbody', {}, rows))
         : h('p', { class: 'hint', text: t('dash.noFeeds') }));
   };
 
@@ -520,12 +595,12 @@ function renderDashboard() {
   const problems = state.logs.filter((e) => e.level !== 'info').slice(-10).reverse();
   main.replaceChildren(
     h('div', { class: 'tiles' },
-      tile(t('dash.now'), h('span', { id: 'dashClock', class: 'clock' })),
-      tile(t('dash.schedules'), h('span', {}, h('span', { class: 'led ' + (state.status.active ? 'ok' : 'warn') }), ' ', state.status.active ? t('top.running') : t('top.paused')), '', h('button', { class: 'btn small', text: state.status.active ? t('top.pause') : t('top.resume'), onclick: async () => { state.status = await api.scheduler.setPaused(state.status.active); refreshDynamic(); } })),
-      tile(t('dash.feedsOk'), String(ok), ok ? 'good' : ''),
-      tile(t('dash.problems'), String(bad), bad ? 'bad' : ''),
-      tile(t('dash.nextCheck'), first ? h('span', { 'data-until': String(first.when) }) : '—', '', first ? h('div', { class: 'tile-sub', text: t('dash.nextWhat', { p: first.p.name, f: first.f.folder }) }) : null),
-      tile(t('dash.lastChange'), lastChange ? fmtDateTime(lastChange) : t('dash.notYet'), 'small')),
+      tile(t('dash.now'), h('span', { id: 'dashClock', class: 'clock' }), '', null, 'clock'),
+      tile(t('dash.schedules'), h('span', {}, h('span', { class: 'led ' + (state.status.active ? 'ok' : 'warn') }), ' ', state.status.active ? t('top.running') : t('top.paused')), 'small', h('button', { class: 'btn small', text: state.status.active ? t('top.pause') : t('top.resume'), onclick: async () => { state.status = await api.scheduler.setPaused(state.status.active); refreshDynamic(); } }), 'layers'),
+      tile(t('dash.feedsOk'), String(ok), ok ? 'good' : '', null, 'check'),
+      tile(t('dash.problems'), String(bad), bad ? 'bad' : '', null, 'alert'),
+      tile(t('dash.nextCheck'), first ? h('span', { 'data-until': String(first.when) }) : '—', '', first ? h('div', {}, h('div', { class: 'tile-sub', text: t('dash.nextWhat', { p: first.p.name, f: first.f.folder }) }), h('progress', { class: 'next-bar', max: 1000, value: 0, 'data-bar-until': String(first.when), 'data-bar-span': String(tickMs(first.p)), 'aria-label': t('dash.nextCheck') })) : null, 'pulse'),
+      tile(t('dash.lastChange'), lastChange ? fmtDateTime(lastChange) : t('dash.notYet'), 'small', null, 'edit')),
     h('section', { class: 'dcard' },
       h('div', { class: 'dcard-head' }, h('h3', { text: t('dash.upcoming') })),
       up.length
@@ -663,6 +738,9 @@ function renderSettings() {
       h('p', { class: 'hint', text: t('s.headlessEnv') })),
     h('div', { class: 'sec' }, h('h3', { text: t('s.updates') }),
       gen('checkUpdates', 's.checkUpdates'),
+      h('label', { class: 'check' },
+        h('input', { type: 'checkbox', checked: n.updateAlert, disabled: !n.telegram.enabled && !n.email.enabled, onchange: (e) => patchSettings({ notifications: { updateAlert: e.target.checked } }) }),
+        h('span', { text: t('s.updateAlert') })),
       h('button', { class: 'btn', text: t('s.checkNow'), onclick: async () => { const r = await checkUpdate(true); msgBox.textContent = !r.ok ? t('s.updateErr', { e: r.error }) : r.noRelease ? t('s.noRelease') : r.available ? t('update.available', { v: r.latest, c: r.current }) : t('s.upToDate'); } })),
     msgBox);
 }

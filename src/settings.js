@@ -25,6 +25,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   notifications: {
     desktop: true,
     failThreshold: 3, // alert after this many failed runs in a row
+    updateAlert: true, // tell Telegram / email, once per version, that a newer release exists (only when a channel is on)
     digest: { enabled: false, times: ['08:00'] }, // a daily summary on the enabled channels (Telegram, email)
     telegram: { enabled: false, botToken: '', recipients: [] }, // recipients: [{ chatId, note }]
     email: { enabled: false, host: '', port: 587, secure: false, user: '', pass: '', from: '', recipients: [] } // recipients: [address]
@@ -155,6 +156,7 @@ export function sanitizeSettings(s) {
   const n = out.notifications;
   n.desktop = !!n.desktop;
   n.failThreshold = clamp(n.failThreshold, 1, 100, 3);
+  n.updateAlert = !!n.updateAlert;
   const dg = isObj(n.digest) ? n.digest : {};
   const times = [...new Set((Array.isArray(dg.times) ? dg.times : String(dg.times || '').split(/[\s,;]+/)).map((x) => String(x).trim()).filter((x) => isTime(x) && x !== '24:00').map((x) => x.padStart(5, '0')))].sort().slice(0, 6);
   n.digest = { enabled: !!dg.enabled, times: times.length ? times : ['08:00'] };

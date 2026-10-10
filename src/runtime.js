@@ -8,12 +8,14 @@ import { createAlerter } from './notify.js';
 import { msg } from './messages.js';
 import { buildDigest, staleHoursOf } from './digest.js';
 
+const HISTORY_MAX = 24;
 const pad = (n) => String(n).padStart(2, '0');
 
 export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () => {}, stateFile = null, builtinPlaceholder, onStatus = () => {}, now = Date.now, deps = {} }) {
   const engine = createEngine({ log, builtinPlaceholder, now, ...(deps.engine || {}) });
   const alerter = createAlerter({ getSettings, notifyDesktop, log, deps: deps.notify });
-  const status = {}; // profileId -> { lastRunAt, feeds: { feedId: result } }
+  const status = {}; // profileId -> { lastRunAt, feeds: { feedId: result }, history: { feedId: [{ at, ok, changed }] } }
+  let updateNotified = ''; // the newest version already announced on Telegram / email
   const digestSent = {}; // 'YYYY-MM-DD HH:MM' -> true (so a restart does not repeat the summary)
   let digestTimer = null;
   let saveTimer = null;
@@ -28,6 +30,7 @@ export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () 
       const n = engine.importState(raw.engine);
       alerter.importState(raw.alerts);
       Object.assign(digestSent, raw.digestSent || {});
+      updateNotified = typeof raw.updateNotified === 'string' ? raw.updateNotified : '';
       log('info', `state restored (${n} feeds)`);
     } catch (err) {
       if (err.code !== 'ENOENT') log('warn', `state file ignored: ${err.message}`);
@@ -41,7 +44,7 @@ export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () 
     try {
       fs.mkdirSync(path.dirname(stateFile), { recursive: true });
       const tmp = `${stateFile}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify({ version: 1, engine: engine.exportState(), alerts: alerter.exportState(), digestSent }), { mode: 0o600 });
+      fs.writeFileSync(tmp, JSON.stringify({ version: 1, engine: engine.exportState(), alerts: alerter.exportState(), digestSent, updateNotified }), { mode: 0o600 });
       fs.renameSync(tmp, stateFile);
     } catch (err) {
       log('warn', `state not saved: ${err.message}`);
@@ -66,6 +69,10 @@ export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () 
     const results = await engine.runProfile(eff, (feed, r) => {
       st.feeds[feed.id] = r;
       st.lastRunAt = now();
+      // the last checks of this feed (since the app started): the dashboard draws them as a small strip
+      const hist = ((st.history ||= {})[feed.id] ||= []);
+      hist.push({ at: r.at || now(), ok: !!r.ok, changed: !!r.changed });
+      if (hist.length > HISTORY_MAX) hist.splice(0, hist.length - HISTORY_MAX);
       emit();
     }, opts);
     const dirDown = Object.values(results).some((r) => r.code === 'output-missing');
@@ -95,6 +102,7 @@ export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () 
       });
     }
     for (const id of Object.keys(st.feeds)) if (!profile.feeds.some((f) => f.id === id)) delete st.feeds[id];
+    for (const id of Object.keys(st.history || {})) if (!profile.feeds.some((f) => f.id === id)) delete st.history[id];
     emit();
     saveStateSoon();
   }
@@ -124,9 +132,21 @@ export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () 
     saveStateSoon();
   }
 
+  // a newer release exists: say so on Telegram / email, once per version (the desktop window has its own bar)
+  function announceUpdate({ latest, current, url }) {
+    const s = getSettings();
+    const n = s.notifications;
+    if (!n.updateAlert || (!n.telegram.enabled && !n.email.enabled) || !latest || updateNotified === latest) return false;
+    updateNotified = latest;
+    saveStateSoon();
+    const text = msg(s.language, 'update', latest, current, url);
+    alerter.broadcast(text, `[Ticker Feed Builder] ${text.split(/[:(]/)[0].trim()} ${latest}`);
+    return true;
+  }
   return {
     engine,
     scheduler,
+    announceUpdate,
     alerter,
     fullStatus,
     loadState,

@@ -268,3 +268,73 @@ test('headless CLI: --once writes the files and exits 0; unusable settings exit 
   assert.equal(s.notifications.desktop, false);
   server.close();
 });
+
+test('new version alert: once per version, only when a channel is on and the option is on', async () => {
+  const mk = (n) => {
+    const sent = [];
+    const settings = sanitizeSettings({ language: 'it', notifications: n });
+    const rt = createRuntime({ getSettings: () => settings, builtinPlaceholder: async () => PNG, deps: { notify: { sendTelegram: async (c, text) => sent.push(text), sendEmail: async (c, subject, text) => sent.push(subject + ' | ' + text) } } });
+    return { rt, sent };
+  };
+  const rel = { latest: '26.10.9', current: '26.10.8', url: 'https://github.com/djgragra/ticker-feed-builder/releases/tag/v26.10.9' };
+  const settle = () => new Promise((r) => setTimeout(r, 60));
+
+  const off = mk({}); // no channel switched on: nothing to say it on
+  assert.equal(off.rt.announceUpdate(rel), false);
+
+  const optionOff = mk({ updateAlert: false, telegram: { enabled: true, botToken: 'x', recipients: [{ chatId: '1' }] } });
+  assert.equal(optionOff.rt.announceUpdate(rel), false);
+
+  const on = mk({ telegram: { enabled: true, botToken: 'x', recipients: [{ chatId: '1' }] }, email: { enabled: true, host: 'h', recipients: ['a@x.org'], from: 'f@x.org' } });
+  assert.equal(on.rt.announceUpdate(rel), true);
+  await settle();
+  assert.equal(on.sent.length, 2); // Telegram and email
+  assert.ok(on.sent.every((x) => x.includes('26.10.9')));
+  assert.match(on.sent[0], /nuova versione/); // in the language of the app
+  assert.equal(on.rt.announceUpdate(rel), false); // the same version is never announced twice
+  assert.equal(on.rt.announceUpdate({ ...rel, latest: '26.10.10' }), true); // a newer one is
+  on.rt.dispose();
+});
+
+test('dashboard history: the last checks of each feed are kept, newest last, at most 24', async () => {
+  const out = await tmp();
+  const feed = mkFeed({ id: 'f1' });
+  const profile = sanitizeProfile({ ...newProfile('Radio'), outputDir: out, feeds: [feed] });
+  const settings = sanitizeSettings({ profiles: [profile] });
+  let n = 0;
+  const rt = createRuntime({ getSettings: () => settings, builtinPlaceholder: async () => PNG, deps: { engine: { get: async (url) => ({ status: 200, body: Buffer.from(RSS(item('A' + (n++ % 2), 'a'))), url, headers: {} }), retryDelayMs: 1 } } });
+  const prof = settings.profiles[0];
+  const idle = async () => { for (let i = 0; i < 1000 && rt.scheduler.isRunning(prof.id); i++) await new Promise((r) => setTimeout(r, 10)); };
+  for (let i = 0; i < 26; i++) { rt.engine.clearCaches(); rt.scheduler.runNow(prof.id); await idle(); }
+  const hist = rt.fullStatus().profiles[prof.id].history.f1;
+  assert.equal(hist.length, 24);
+  assert.ok(hist.every((h) => h.ok === true && typeof h.at === 'number' && typeof h.changed === 'boolean'));
+  rt.dispose();
+});
+
+test('texts: English, Italian and Spanish have exactly the same keys', async () => {
+  const src = await fs.readFile(new URL('../renderer/i18n.js', import.meta.url), 'utf8');
+  const T = new Function(`${src}; return TEXTS;`)();
+  const keys = (l) => new Set(Object.keys(T[l]));
+  for (const l of ['it', 'es']) {
+    assert.deepEqual([...keys('en')].filter((k) => !keys(l).has(k)), [], `missing in ${l}`);
+    assert.deepEqual([...keys(l)].filter((k) => !keys('en').has(k)), [], `extra in ${l}`);
+  }
+});
+
+test('icons: the SVG sources exist and every icon file is a real image of the right size', async () => {
+  const dir = new URL('../assets/', import.meta.url);
+  for (const f of ['logo.svg', 'tray.svg']) assert.match(await fs.readFile(new URL(f, dir), 'utf8'), /^<svg /);
+  assert.equal(await fs.readFile(new URL('../renderer/logo.svg', import.meta.url), 'utf8'), await fs.readFile(new URL('logo.svg', dir), 'utf8')); // header logo = app icon
+  const png = async (f) => { const b = await fs.readFile(new URL(f, dir)); assert.equal(b.subarray(1, 4).toString(), 'PNG'); return [b.readUInt32BE(16), b.readUInt32BE(20)]; };
+  assert.deepEqual(await png('icon.png'), [1024, 1024]);
+  for (const s of [16, 32, 48, 64, 128, 256, 512]) assert.deepEqual(await png(`linux-icons/${s}x${s}.png`), [s, s]);
+  assert.deepEqual(await png('trayTemplate.png'), [22, 22]);
+  assert.deepEqual(await png('trayTemplate@2x.png'), [44, 44]);
+  const ico = await fs.readFile(new URL('icon.ico', dir));
+  assert.equal(ico.readUInt16LE(2), 1); // icon resource
+  assert.ok(ico.readUInt16LE(4) >= 6); // 16 … 256
+  const icns = await fs.readFile(new URL('icon.icns', dir));
+  assert.equal(icns.subarray(0, 4).toString(), 'icns');
+  assert.equal(icns.readUInt32BE(4), icns.length);
+});
