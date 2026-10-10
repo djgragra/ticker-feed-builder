@@ -530,12 +530,23 @@ function upcomingChecks() {
   return out.sort((a, b) => (typeof a.when === 'number' ? a.when : Infinity) - (typeof b.when === 'number' ? b.when : Infinity));
 }
 
-// the last checks of a feed as small bars: new stories / no change / failed (and the same in words, for the tooltip)
+// the last 24 hours of a feed, one bar per clock hour: failures first, then new stories, then "nothing new" (grey), empty hours faint
 function historyStrip(list) {
-  if (!list || !list.length) return h('span', { class: 'time', text: '—' });
-  const word = (x) => (!x.ok ? t('hist.fail') : x.changed ? t('hist.changed') : t('hist.same'));
-  return h('span', { class: 'hist', role: 'img', 'aria-label': t('dash.history') + ': ' + list.map(word).join(', ') },
-    list.map((x) => h('span', { class: 'hb ' + (!x.ok ? 'bad' : x.changed ? 'ok' : 'same'), title: `${fmtTime(x.at)} · ${word(x)}` })));
+  const byHour = new Map((list || []).map((b) => [b.h, b]));
+  const top = new Date(); top.setMinutes(0, 0, 0);
+  const slots = [];
+  for (let i = 23; i >= 0; i--) {
+    const d = new Date(top); d.setHours(top.getHours() - i);
+    slots.push({ d, b: byHour.get(d.getTime()) });
+  }
+  let c = 0, f = 0;
+  const bars = slots.map(({ d, b }) => {
+    const label = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (!b) return h('span', { class: 'hb none', title: `${label} · ${t('hist.none')}` });
+    if (b.f) f++; else if (b.c) c++;
+    return h('span', { class: 'hb ' + (b.f ? 'bad' : b.c ? 'ok' : 'same'), title: `${label} · ${t('hist.tip', { n: b.n, c: b.c, f: b.f })}` });
+  });
+  return h('span', { class: 'hist', role: 'img', 'aria-label': `${t('dash.history')}: ${t('hist.summary', { c, f })}` }, bars);
 }
 
 function renderDashboard() {

@@ -298,6 +298,7 @@ table.feeds th { padding: 6px; }
 .dcard { padding: 14px 16px; }
 .hist { display: inline-flex; gap: 2px; align-items: flex-end; height: 18px; }
 .hb { width: 5px; height: 14px; border-radius: 2px; background: var(--off); }
+.hb.none { height: 3px; opacity: .35; }
 .hb.ok { background: var(--ok); } .hb.same { background: var(--off); height: 8px; } .hb.bad { background: var(--bad); height: 18px; }
 
 /* preview as on air */

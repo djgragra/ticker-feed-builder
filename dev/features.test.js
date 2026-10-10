@@ -296,20 +296,65 @@ test('new version alert: once per version, only when a channel is on and the opt
   on.rt.dispose();
 });
 
-test('dashboard history: the last checks of each feed are kept, newest last, at most 24', async () => {
+test('dashboard history: one bucket per clock hour for the last 24 hours, kept across a restart', async () => {
   const out = await tmp();
+  const stateFile = path.join(await tmp(), 'state.json');
   const feed = mkFeed({ id: 'f1' });
   const profile = sanitizeProfile({ ...newProfile('Radio'), outputDir: out, feeds: [feed] });
   const settings = sanitizeSettings({ profiles: [profile] });
-  let n = 0;
-  const rt = createRuntime({ getSettings: () => settings, builtinPlaceholder: async () => PNG, deps: { engine: { get: async (url) => ({ status: 200, body: Buffer.from(RSS(item('A' + (n++ % 2), 'a'))), url, headers: {} }), retryDelayMs: 1 } } });
+  let t = new Date(2026, 9, 10, 8, 10).getTime();
+  let n = 0, fail = false;
+  const mk = () => createRuntime({
+    getSettings: () => settings, stateFile, builtinPlaceholder: async () => PNG, now: () => t,
+    deps: { engine: { get: async (url) => { if (fail) throw new Error('HTTP 503'); return { status: 200, body: Buffer.from(RSS(item('A' + (n++), 'a'))), url, headers: {} }; }, retryDelayMs: 1 } }
+  });
   const prof = settings.profiles[0];
+  const rt = mk();
   const idle = async () => { for (let i = 0; i < 1000 && rt.scheduler.isRunning(prof.id); i++) await new Promise((r) => setTimeout(r, 10)); };
-  for (let i = 0; i < 26; i++) { rt.engine.clearCaches(); rt.scheduler.runNow(prof.id); await idle(); }
+  const run = async () => { rt.engine.clearCaches(); rt.scheduler.runNow(prof.id); await idle(); };
+  await run(); t += 600_000; await run(); // two checks in the 08:00 hour, both with new stories
+  fail = true; t += 3_600_000; await run(); // 09:00 hour: one failed check
   const hist = rt.fullStatus().profiles[prof.id].history.f1;
-  assert.equal(hist.length, 24);
-  assert.ok(hist.every((h) => h.ok === true && typeof h.at === 'number' && typeof h.changed === 'boolean'));
-  rt.dispose();
+  assert.equal(hist.length, 2);
+  assert.deepEqual(hist.map((b) => [b.n, b.c, b.f]), [[2, 2, 0], [1, 0, 1]]);
+  assert.ok(hist[0].h < hist[1].h);
+  assert.equal(new Date(hist[0].h).getMinutes(), 0);
+  rt.dispose(); // writes the state file
+
+  // a restart: the strip is still there
+  const rt2 = mk();
+  rt2.loadState();
+  assert.deepEqual(rt2.fullStatus().profiles[prof.id].history.f1, hist);
+
+  // 30 hours later the old hours are gone; at most 24 buckets
+  t += 30 * 3_600_000; fail = false;
+  const rt3 = mk();
+  rt3.loadState();
+  assert.equal(rt3.fullStatus().profiles[prof.id].history?.f1, undefined);
+  rt2.dispose(); rt3.dispose();
+});
+
+test('dashboard history: a state file without it, or with damaged entries, still loads', async () => {
+  const out = await tmp();
+  const dir = await tmp();
+  const feed = mkFeed({ id: 'f1' });
+  const profile = sanitizeProfile({ ...newProfile('Radio'), outputDir: out, feeds: [feed] });
+  const settings = sanitizeSettings({ profiles: [profile] });
+  const prof = settings.profiles[0];
+  const stateFile = path.join(dir, 'state.json');
+  const load = async (content) => {
+    await fs.writeFile(stateFile, JSON.stringify(content));
+    const rt = createRuntime({ getSettings: () => settings, stateFile, builtinPlaceholder: async () => PNG });
+    rt.loadState();
+    const h = rt.fullStatus().profiles[prof.id].history?.f1;
+    rt.dispose();
+    return h;
+  };
+  assert.equal(await load({ version: 1, engine: {}, alerts: {}, digestSent: {} }), undefined); // written by 26.10.8
+  const hourNow = new Date(); hourNow.setMinutes(0, 0, 0);
+  const good = { h: hourNow.getTime(), n: 3, c: 1, f: 0 };
+  const h = await load({ version: 1, history: { [prof.id]: { f1: [good, { h: 'x', n: 1, c: 0, f: 0 }, null, { h: hourNow.getTime() - 1000, n: -4, c: 0, f: 0 }], gone: [good] }, other: { f1: [good] } } });
+  assert.deepEqual(h, [good]); // only the valid entry, only for existing profile and feed
 });
 
 test('texts: English, Italian and Spanish have exactly the same keys', async () => {
