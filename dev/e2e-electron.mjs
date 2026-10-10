@@ -31,7 +31,8 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 
 const port = 9300 + Math.floor(Math.random() * 500);
-const child = spawn(electron, [root, `--remote-debugging-port=${port}`, `--user-data-dir=${userData}`], { stdio: 'ignore' });
+const extra = (process.env.ELECTRON_EXTRA_ARGS || '').split(' ').filter(Boolean); // e.g. --no-sandbox when run as root
+const child = spawn(electron, [root, `--remote-debugging-port=${port}`, `--user-data-dir=${userData}`, ...extra], { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function target() {

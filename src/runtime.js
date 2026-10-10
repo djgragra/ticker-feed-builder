@@ -149,7 +149,7 @@ export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () 
     saveStateSoon();
   }
 
-  const scheduler = createScheduler({ getProfiles: () => getSettings().profiles, run: runProfile, now, onState: emit });
+  const scheduler = createScheduler({ getProfiles: () => getSettings().profiles, run: runProfile, now, onState: emit, getStagger: () => !!getSettings().general.staggerProfiles, getLastCheck: (pid) => engine.lastCheckAt(pid) });
 
   // ---- daily summary --------------------------------------------------------------------------------
   function digestNow() {

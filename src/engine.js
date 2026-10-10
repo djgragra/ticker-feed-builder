@@ -349,13 +349,14 @@ export function createEngine({ log = () => {}, get = httpGet, convert = toJpeg, 
   }
 
   // Runs the enabled feeds of a profile that are due, one after the other, then the merged feeds. A feed has its own
-  // interval (feed.intervalMin) or the profile's; `force` (manual "Run now") ignores the intervals and rebuilds everything.
-  async function runProfile(profile, onFeed = () => {}, { force = false } = {}) {
+  // interval (feed.intervalMin) or the profile's; `all` (a fixed time of the profile) ignores the intervals; `force` (manual "Run now")
+  // ignores them too and rebuilds everything.
+  async function runProfile(profile, onFeed = () => {}, { force = false, all = false } = {}) {
     const results = {};
     const dueAt = (f) => {
       const last = lastCheck.get(`${profile.id}|${f.id}`);
       const every = (f.intervalMin || profile.intervalMin) * 60_000;
-      return force || last === undefined || now() - last >= every - 5000; // the scheduler ticks with a few seconds of jitter
+      return force || all || last === undefined || now() - last >= every - 5000; // the scheduler ticks with a few seconds of jitter
     };
     const normal = profile.feeds.filter((f) => f.enabled && f.type !== 'merge' && dueAt(f));
     const merges = profile.feeds.filter((f) => f.enabled && f.type === 'merge');
@@ -474,6 +475,13 @@ export function createEngine({ log = () => {}, get = httpGet, convert = toJpeg, 
   }
 
   return {
+    // when this profile was last checked (also from the state remembered across a restart); 0 = never
+    lastCheckAt(profileId) {
+      let t = 0;
+      for (const [k, v] of feedState) if (k.startsWith(profileId + '|')) t = Math.max(t, lastCheck.get(k) ?? v.result?.at ?? 0);
+      for (const [k, v] of lastCheck) if (k.startsWith(profileId + '|')) t = Math.max(t, v);
+      return t;
+    },
     runFeed, runMerge, runProfile, previewFeed, placeholderThumb, ensureOutputDir, exportState, importState, pruneState,
     clearCaches: () => { feedCache.clear(); imageCache.clear(); placeholderCache.clear(); }
   };
