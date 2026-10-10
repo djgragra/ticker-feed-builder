@@ -207,6 +207,8 @@ app.whenReady().then(() => {
   }
   refreshTray();
   setInterval(() => logger.prune(), 6 * 3600_000).unref();
+  setTimeout(() => updateAlertTick().catch(() => {}), 60_000).unref();
+  setInterval(() => updateAlertTick().catch(() => {}), 6 * 3600_000).unref();
   app.on('activate', showWindow);
 });
 app.on('second-instance', showWindow);
@@ -374,6 +376,14 @@ ipcMain.handle('cli:info', () => ({
 ipcMain.handle('open-external', (_e, url) => {
   if (typeof url === 'string' && EXTERNAL_OK.test(url)) shell.openExternal(url);
 });
+
+// Telegram / email notice of a new version: the main process checks on its own, so it also works while the window is closed
+async function updateAlertTick() {
+  const s = settings();
+  if (!s.general.checkUpdates || !s.notifications.updateAlert) return;
+  const info = await checkForUpdate();
+  if (info.ok && info.available) runtime.announceUpdate({ latest: info.latest, current: info.current, url: info.url });
+}
 
 ipcMain.handle('update:check', async () => {
   const info = await checkForUpdate();

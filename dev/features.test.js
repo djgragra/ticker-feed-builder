@@ -268,3 +268,118 @@ test('headless CLI: --once writes the files and exits 0; unusable settings exit 
   assert.equal(s.notifications.desktop, false);
   server.close();
 });
+
+test('new version alert: once per version, only when a channel is on and the option is on', async () => {
+  const mk = (n) => {
+    const sent = [];
+    const settings = sanitizeSettings({ language: 'it', notifications: n });
+    const rt = createRuntime({ getSettings: () => settings, builtinPlaceholder: async () => PNG, deps: { notify: { sendTelegram: async (c, text) => sent.push(text), sendEmail: async (c, subject, text) => sent.push(subject + ' | ' + text) } } });
+    return { rt, sent };
+  };
+  const rel = { latest: '26.10.9', current: '26.10.8', url: 'https://github.com/djgragra/ticker-feed-builder/releases/tag/v26.10.9' };
+  const settle = () => new Promise((r) => setTimeout(r, 60));
+
+  const off = mk({}); // no channel switched on: nothing to say it on
+  assert.equal(off.rt.announceUpdate(rel), false);
+
+  const optionOff = mk({ updateAlert: false, telegram: { enabled: true, botToken: 'x', recipients: [{ chatId: '1' }] } });
+  assert.equal(optionOff.rt.announceUpdate(rel), false);
+
+  const on = mk({ telegram: { enabled: true, botToken: 'x', recipients: [{ chatId: '1' }] }, email: { enabled: true, host: 'h', recipients: ['a@x.org'], from: 'f@x.org' } });
+  assert.equal(on.rt.announceUpdate(rel), true);
+  await settle();
+  assert.equal(on.sent.length, 2); // Telegram and email
+  assert.ok(on.sent.every((x) => x.includes('26.10.9')));
+  assert.match(on.sent[0], /nuova versione/); // in the language of the app
+  assert.equal(on.rt.announceUpdate(rel), false); // the same version is never announced twice
+  assert.equal(on.rt.announceUpdate({ ...rel, latest: '26.10.10' }), true); // a newer one is
+  on.rt.dispose();
+});
+
+test('dashboard history: one bucket per clock hour for the last 24 hours, kept across a restart', async () => {
+  const out = await tmp();
+  const stateFile = path.join(await tmp(), 'state.json');
+  const feed = mkFeed({ id: 'f1' });
+  const profile = sanitizeProfile({ ...newProfile('Radio'), outputDir: out, feeds: [feed] });
+  const settings = sanitizeSettings({ profiles: [profile] });
+  let t = new Date(2026, 9, 10, 8, 10).getTime();
+  let n = 0, fail = false;
+  const mk = () => createRuntime({
+    getSettings: () => settings, stateFile, builtinPlaceholder: async () => PNG, now: () => t,
+    deps: { engine: { get: async (url) => { if (fail) throw new Error('HTTP 503'); return { status: 200, body: Buffer.from(RSS(item('A' + (n++), 'a'))), url, headers: {} }; }, retryDelayMs: 1 } }
+  });
+  const prof = settings.profiles[0];
+  const rt = mk();
+  const idle = async () => { for (let i = 0; i < 1000 && rt.scheduler.isRunning(prof.id); i++) await new Promise((r) => setTimeout(r, 10)); };
+  const run = async () => { rt.engine.clearCaches(); rt.scheduler.runNow(prof.id); await idle(); };
+  await run(); t += 600_000; await run(); // two checks in the 08:00 hour, both with new stories
+  fail = true; t += 3_600_000; await run(); // 09:00 hour: one failed check
+  const hist = rt.fullStatus().profiles[prof.id].history.f1;
+  assert.equal(hist.length, 2);
+  assert.deepEqual(hist.map((b) => [b.n, b.c, b.f]), [[2, 2, 0], [1, 0, 1]]);
+  assert.ok(hist[0].h < hist[1].h);
+  assert.equal(new Date(hist[0].h).getMinutes(), 0);
+  rt.dispose(); // writes the state file
+
+  // a restart: the strip is still there
+  const rt2 = mk();
+  rt2.loadState();
+  assert.deepEqual(rt2.fullStatus().profiles[prof.id].history.f1, hist);
+
+  // 30 hours later the old hours are gone; at most 24 buckets
+  t += 30 * 3_600_000; fail = false;
+  const rt3 = mk();
+  rt3.loadState();
+  assert.equal(rt3.fullStatus().profiles[prof.id].history?.f1, undefined);
+  rt2.dispose(); rt3.dispose();
+});
+
+test('dashboard history: a state file without it, or with damaged entries, still loads', async () => {
+  const out = await tmp();
+  const dir = await tmp();
+  const feed = mkFeed({ id: 'f1' });
+  const profile = sanitizeProfile({ ...newProfile('Radio'), outputDir: out, feeds: [feed] });
+  const settings = sanitizeSettings({ profiles: [profile] });
+  const prof = settings.profiles[0];
+  const stateFile = path.join(dir, 'state.json');
+  const load = async (content) => {
+    await fs.writeFile(stateFile, JSON.stringify(content));
+    const rt = createRuntime({ getSettings: () => settings, stateFile, builtinPlaceholder: async () => PNG });
+    rt.loadState();
+    const h = rt.fullStatus().profiles[prof.id].history?.f1;
+    rt.dispose();
+    return h;
+  };
+  assert.equal(await load({ version: 1, engine: {}, alerts: {}, digestSent: {} }), undefined); // written by 26.10.8
+  const hourNow = new Date(); hourNow.setMinutes(0, 0, 0);
+  const good = { h: hourNow.getTime(), n: 3, c: 1, f: 0 };
+  const h = await load({ version: 1, history: { [prof.id]: { f1: [good, { h: 'x', n: 1, c: 0, f: 0 }, null, { h: hourNow.getTime() - 1000, n: -4, c: 0, f: 0 }], gone: [good] }, other: { f1: [good] } } });
+  assert.deepEqual(h, [good]); // only the valid entry, only for existing profile and feed
+});
+
+test('texts: English, Italian and Spanish have exactly the same keys', async () => {
+  const src = await fs.readFile(new URL('../renderer/i18n.js', import.meta.url), 'utf8');
+  const T = new Function(`${src}; return TEXTS;`)();
+  const keys = (l) => new Set(Object.keys(T[l]));
+  for (const l of ['it', 'es']) {
+    assert.deepEqual([...keys('en')].filter((k) => !keys(l).has(k)), [], `missing in ${l}`);
+    assert.deepEqual([...keys(l)].filter((k) => !keys('en').has(k)), [], `extra in ${l}`);
+  }
+});
+
+test('icons: the SVG sources exist and every icon file is a real image of the right size', async () => {
+  const dir = new URL('../assets/', import.meta.url);
+  for (const f of ['logo.svg', 'tray.svg']) assert.match(await fs.readFile(new URL(f, dir), 'utf8'), /^<svg /);
+  assert.equal(await fs.readFile(new URL('../renderer/logo.svg', import.meta.url), 'utf8'), await fs.readFile(new URL('logo.svg', dir), 'utf8')); // header logo = app icon
+  const png = async (f) => { const b = await fs.readFile(new URL(f, dir)); assert.equal(b.subarray(1, 4).toString(), 'PNG'); return [b.readUInt32BE(16), b.readUInt32BE(20)]; };
+  assert.deepEqual(await png('icon.png'), [1024, 1024]);
+  for (const s of [16, 32, 48, 64, 128, 256, 512]) assert.deepEqual(await png(`linux-icons/${s}x${s}.png`), [s, s]);
+  assert.deepEqual(await png('trayTemplate.png'), [22, 22]);
+  assert.deepEqual(await png('trayTemplate@2x.png'), [44, 44]);
+  const ico = await fs.readFile(new URL('icon.ico', dir));
+  assert.equal(ico.readUInt16LE(2), 1); // icon resource
+  assert.ok(ico.readUInt16LE(4) >= 6); // 16 … 256
+  const icns = await fs.readFile(new URL('icon.icns', dir));
+  assert.equal(icns.subarray(0, 4).toString(), 'icns');
+  assert.equal(icns.readUInt32BE(4), icns.length);
+});

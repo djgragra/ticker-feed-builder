@@ -1,6 +1,7 @@
 // Alerts when a feed (or a whole output folder) keeps failing, and when it recovers.
-// Channels: desktop notification and Telegram (Bot API). Nothing is hard-coded: the token and the chat IDs
-// come from the user's settings. Email is not offered: it would need an SMTP server and a password.
+// Channels: desktop notification, Telegram (Bot API) and email (SMTP). Nothing is hard-coded: the token, the chat
+// IDs, the server and the password come from the user's settings. This is the model for the alerts of every
+// OnAir Garage app (rules in garage-hub apps/STANDARD.md, "Alerts").
 import { msg } from './messages.js';
 import { EMAIL_RE } from './settings.js';
 

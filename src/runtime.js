@@ -8,12 +8,16 @@ import { createAlerter } from './notify.js';
 import { msg } from './messages.js';
 import { buildDigest, staleHoursOf } from './digest.js';
 
+// per feed, one bucket per clock hour for the last 24 hours: { h: start of the hour (ms), n: checks, c: with new stories, f: failed }
+const HISTORY_HOURS = 24;
+const hourStart = (ms) => { const d = new Date(ms); d.setMinutes(0, 0, 0); return d.getTime(); };
 const pad = (n) => String(n).padStart(2, '0');
 
 export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () => {}, stateFile = null, builtinPlaceholder, onStatus = () => {}, now = Date.now, deps = {} }) {
   const engine = createEngine({ log, builtinPlaceholder, now, ...(deps.engine || {}) });
   const alerter = createAlerter({ getSettings, notifyDesktop, log, deps: deps.notify });
-  const status = {}; // profileId -> { lastRunAt, feeds: { feedId: result } }
+  const status = {}; // profileId -> { lastRunAt, feeds: { feedId: result }, history: { feedId: [hour buckets] } }
+  let updateNotified = ''; // the newest version already announced on Telegram / email
   const digestSent = {}; // 'YYYY-MM-DD HH:MM' -> true (so a restart does not repeat the summary)
   let digestTimer = null;
   let saveTimer = null;
@@ -28,6 +32,8 @@ export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () 
       const n = engine.importState(raw.engine);
       alerter.importState(raw.alerts);
       Object.assign(digestSent, raw.digestSent || {});
+      importHistory(raw.history);
+      updateNotified = typeof raw.updateNotified === 'string' ? raw.updateNotified : '';
       log('info', `state restored (${n} feeds)`);
     } catch (err) {
       if (err.code !== 'ENOENT') log('warn', `state file ignored: ${err.message}`);
@@ -41,13 +47,55 @@ export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () 
     try {
       fs.mkdirSync(path.dirname(stateFile), { recursive: true });
       const tmp = `${stateFile}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify({ version: 1, engine: engine.exportState(), alerts: alerter.exportState(), digestSent }), { mode: 0o600 });
+      fs.writeFileSync(tmp, JSON.stringify({ version: 1, engine: engine.exportState(), alerts: alerter.exportState(), digestSent, updateNotified, history: exportHistory() }), { mode: 0o600 });
       fs.renameSync(tmp, stateFile);
     } catch (err) {
       log('warn', `state not saved: ${err.message}`);
     }
   }
   const saveStateSoon = () => { if (!saveTimer) saveTimer = setTimeout(saveStateNow, 3000); };
+
+  // ---- the last 24 hours of checks, for the dashboard (kept across restarts with the rest of the state) ----
+  const historyCut = () => hourStart(now()) - (HISTORY_HOURS - 1) * 3_600_000;
+  function recordCheck(st, feedId, r) {
+    const list = ((st.history ||= {})[feedId] ||= []);
+    const h = hourStart(r.at || now());
+    let b = list.find((x) => x.h === h);
+    if (!b) { b = { h, n: 0, c: 0, f: 0 }; list.push(b); list.sort((x, y) => x.h - y.h); }
+    b.n++;
+    if (!r.ok) b.f++;
+    else if (r.changed) b.c++;
+    const cut = historyCut();
+    while (list.length && list[0].h < cut) list.shift();
+  }
+  // what goes to the state file: only profiles and feeds that still exist, only the last 24 hours
+  function exportHistory() {
+    const out = {};
+    const cut = historyCut();
+    for (const p of getSettings().profiles) {
+      for (const f of p.feeds) {
+        const list = (status[p.id]?.history?.[f.id] || []).filter((b) => b.h >= cut);
+        if (list.length) (out[p.id] ||= {})[f.id] = list;
+      }
+    }
+    return out;
+  }
+  // a damaged or hand-edited file must never break the start: bad entries are simply dropped
+  function importHistory(raw) {
+    if (!raw || typeof raw !== 'object') return;
+    const cut = historyCut();
+    const num = (v) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : null);
+    for (const p of getSettings().profiles) {
+      for (const f of p.feeds) {
+        const list = (Array.isArray(raw[p.id]?.[f.id]) ? raw[p.id][f.id] : [])
+          .map((b) => ({ h: num(b?.h), n: num(b?.n), c: num(b?.c), f: num(b?.f) }))
+          .filter((b) => b.h !== null && b.n !== null && b.c !== null && b.f !== null && b.h >= cut)
+          .sort((x, y) => x.h - y.h)
+          .slice(-HISTORY_HOURS);
+        if (list.length) ((status[p.id] ||= { feeds: {} }).history ||= {})[f.id] = list;
+      }
+    }
+  }
 
   // ---- status ---------------------------------------------------------------------------------------
   function fullStatus() {
@@ -66,6 +114,7 @@ export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () 
     const results = await engine.runProfile(eff, (feed, r) => {
       st.feeds[feed.id] = r;
       st.lastRunAt = now();
+      recordCheck(st, feed.id, r);
       emit();
     }, opts);
     const dirDown = Object.values(results).some((r) => r.code === 'output-missing');
@@ -95,6 +144,7 @@ export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () 
       });
     }
     for (const id of Object.keys(st.feeds)) if (!profile.feeds.some((f) => f.id === id)) delete st.feeds[id];
+    for (const id of Object.keys(st.history || {})) if (!profile.feeds.some((f) => f.id === id)) delete st.history[id];
     emit();
     saveStateSoon();
   }
@@ -124,9 +174,21 @@ export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () 
     saveStateSoon();
   }
 
+  // a newer release exists: say so on Telegram / email, once per version (the desktop window has its own bar)
+  function announceUpdate({ latest, current, url }) {
+    const s = getSettings();
+    const n = s.notifications;
+    if (!n.updateAlert || (!n.telegram.enabled && !n.email.enabled) || !latest || updateNotified === latest) return false;
+    updateNotified = latest;
+    saveStateSoon();
+    const text = msg(s.language, 'update', latest, current, url);
+    alerter.broadcast(text, `[Ticker Feed Builder] ${text.split(/[:(]/)[0].trim()} ${latest}`);
+    return true;
+  }
   return {
     engine,
     scheduler,
+    announceUpdate,
     alerter,
     fullStatus,
     loadState,

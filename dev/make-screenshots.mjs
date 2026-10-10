@@ -100,7 +100,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
 
 // ---- drive the real app ------------------------------------------------------------------------------------------
 const port = 9800 + Math.floor(Math.random() * 300);
-const child = spawn(electron, [root, `--remote-debugging-port=${port}`, `--user-data-dir=${userData}`], { stdio: 'ignore' });
+const extra = (process.env.ELECTRON_EXTRA_ARGS || '').split(' ').filter(Boolean); // e.g. --no-sandbox when run as root (containers, CI)
+const child = spawn(electron, [root, `--remote-debugging-port=${port}`, `--user-data-dir=${userData}`, ...extra], { stdio: 'ignore' });
 let ws, id = 0;
 const pending = new Map();
 const cdp = (method, params = {}) => new Promise((resolve, reject) => { const my = ++id; pending.set(my, { resolve, reject }); ws.send(JSON.stringify({ id: my, method, params })); });
