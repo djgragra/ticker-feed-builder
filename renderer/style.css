@@ -332,3 +332,4 @@ td.st .time { display: block; margin-top: 3px; }
 .dtable td.st .time { display: none; }
 :root { --accent-soft: rgba(240,138,36,.09); }
 :root[data-theme="light"] { --accent-soft: rgba(194,97,10,.08); }
+.tiles { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }

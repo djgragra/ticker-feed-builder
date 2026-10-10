@@ -9,7 +9,7 @@ Downloads RSS feeds on a schedule and turns each one into numbered text lines an
 
 ![Dashboard of Ticker Feed Builder](docs/screenshots/01-dashboard.png)
 
-_Screenshots use invented demo feeds, taken on macOS (dark and light themes)._
+_Screenshots use invented demo feeds, taken from the real app (version 26.10.9, running on Linux; dark and light themes)._
 
 ## What it does
 
