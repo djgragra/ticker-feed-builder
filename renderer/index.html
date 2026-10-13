@@ -20,12 +20,7 @@
     </div>
   </header>
 
-  <div id="updateBar" class="update-bar" hidden>
-    <span id="updateText"></span>
-    <button class="btn small" id="updateDownload" data-i18n="update.download"></button>
-    <button class="btn small" id="updateNotes" data-i18n="update.notes"></button>
-    <button class="btn small" id="updateClose" aria-label="Close">×</button>
-  </div>
+  <div id="updateBar" class="update-bar" role="status" hidden></div>
 
   <div class="layout">
     <nav class="rail" aria-label="Profiles">
@@ -55,6 +50,13 @@
   <dialog id="dlgFeed" class="dlg wide">
     <div class="dlg-head"><h2 id="feedTitle"></h2><button class="btn small" data-close aria-label="Close">×</button></div>
     <div class="dlg-body" id="feedBody"></div>
+  </dialog>
+
+  <dialog id="dlgWhatsNew" class="dlg">
+    <div class="dlg-head"><h2 id="whatsNewTitle"></h2></div>
+    <div class="dlg-body"><div id="whatsNewBody"></div>
+      <div class="dlg-actions"><button class="btn" id="whatsNewNotes" data-i18n="update.notes"></button><button class="btn primary" id="whatsNewOk" data-i18n="common.ok"></button></div>
+    </div>
   </dialog>
 
   <dialog id="dlgNew" class="dlg">

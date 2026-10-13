@@ -20,7 +20,8 @@ const M = {
     update: (v, cur, url) => `A new version of Ticker Feed Builder is available: ${v} (installed: ${cur}). ${url}`,
     emailIncomplete: 'Email is not set up: an SMTP server, a sender and at least one valid recipient are needed.',
     emailFailed: 'Email: ',
-    tgFailed: 'Telegram: '
+    tgFailed: 'Telegram: ',
+    updatedTo: (v) => `Updated to ${v}.`
   },
   it: {
     down: (p, f, n, err) => `Feed "${f}" (${p}) fallito ${n} volte di fila: ${err}`,
@@ -42,7 +43,8 @@ const M = {
     update: (v, cur, url) => `È disponibile una nuova versione di Ticker Feed Builder: ${v} (installata: ${cur}). ${url}`,
     emailIncomplete: 'L\'email non è configurata: servono un server SMTP, un mittente e almeno un destinatario valido.',
     emailFailed: 'Email: ',
-    tgFailed: 'Telegram: '
+    tgFailed: 'Telegram: ',
+    updatedTo: (v) => `Aggiornato alla versione ${v}.`
   },
   es: {
     down: (p, f, n, err) => `Feed "${f}" (${p}) falló ${n} veces seguidas: ${err}`,
@@ -64,7 +66,8 @@ const M = {
     update: (v, cur, url) => `Hay una nueva versión de Ticker Feed Builder: ${v} (instalada: ${cur}). ${url}`,
     emailIncomplete: 'El correo no está configurado: hacen falta un servidor SMTP, un remitente y al menos un destinatario válido.',
     emailFailed: 'Correo: ',
-    tgFailed: 'Telegram: '
+    tgFailed: 'Telegram: ',
+    updatedTo: (v) => `Actualizado a la versión ${v}.`
   }
 };
 export const msg = (lang, key, ...args) => {

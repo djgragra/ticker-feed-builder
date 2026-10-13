@@ -188,7 +188,7 @@ export function createEngine({ log = () => {}, get = httpGet, convert = toJpeg, 
 
   // Filters, duplicates, order, then the first maxItems. `seen` (titles of the earlier feeds of the profile) is optional.
   function selectItems(profile, feed, items, seen) {
-    const { items: filtered, removed } = applyFilters(items, feed.filters, profile.dedupeAcrossFeeds ? seen : null);
+    const { items: filtered, removed } = applyFilters(items, feed.filters, profile.dedupeAcrossFeeds ? seen : null, now());
     return { pool: filtered.slice(0, POOL_MAX), selected: filtered.slice(0, feed.maxItems), removed };
   }
 
@@ -298,10 +298,13 @@ export function createEngine({ log = () => {}, get = httpGet, convert = toJpeg, 
         log('info', `${folder}: no change`);
         return { ...prev.result, unchanged: true, changed: false, durationMs: now() - started, at: now() };
       };
-      const res = await fetchFeed(feed, smart ? prev : null);
+      // With a maximum age the answer depends on the clock too: a story can grow too old while the feed stays the same.
+      // Then the feed is downloaded at every check and compared by the stories chosen, not by the feed's own bytes.
+      const ageOn = feed.filters?.maxAgeHours > 0;
+      const res = await fetchFeed(feed, smart && !ageOn ? prev : null);
       if (res.notModified) return skipUnchanged();
-      const hash = sha1(res.body);
-      if (smart && hash === prev.hash) return skipUnchanged();
+      let hash = sha1(res.body);
+      if (smart && !ageOn && hash === prev.hash) return skipUnchanged();
       let all;
       try {
         all = parseFeed(res.body, res.url);
@@ -313,6 +316,10 @@ export function createEngine({ log = () => {}, get = httpGet, convert = toJpeg, 
       for (const it of all) { it._host = host; it._insecure = !!feed.insecureTls; }
       const { pool, selected, removed } = selectItems(profile, feed, all, seen);
       if (!selected.length) throw new EngineError('no-items', 'No story is left after the filters');
+      if (ageOn) {
+        hash = sha1(JSON.stringify(selected.map((s) => [s.title, s.description, s.image])));
+        if (smart && hash === prev.hash) { fresh?.set(feed.id, pool); return skipUnchanged(); }
+      }
       fresh?.set(feed.id, pool);
       const out = await build(profile, feed, selected, { key, prev, started, sig, hash, validators: { etag: res.headers?.etag, lastModified: res.headers?.['last-modified'] }, pool, removed });
       if (seen) for (const it of selected) { const k = titleKey(it); if (k) seen.add(k); }
@@ -331,7 +338,7 @@ export function createEngine({ log = () => {}, get = httpGet, convert = toJpeg, 
       if (!profile.outputDir) throw new EngineError('output-missing', 'No output folder set');
       await ensureOutputDir(profile);
       const pools = feed.sources.map((sid) => fresh?.get(sid) ?? feedState.get(`${profile.id}|${sid}`)?.pool ?? []);
-      const merged = sortNewest(applyFilters(pools.flat(), { ...feed.filters, dedupe: true, sort: 'feed' }).items);
+      const merged = sortNewest(applyFilters(pools.flat(), { ...feed.filters, dedupe: true, sort: 'feed' }, null, now()).items);
       const { selected, removed } = selectItems(profile, { ...feed, filters: { ...feed.filters, dedupe: true, sort: 'feed' } }, merged, null);
       if (!selected.length) throw new EngineError('no-items', 'The source feeds have no stories yet');
       const hash = sha1(JSON.stringify(selected.map((s) => [s.title, s.description, s.image])));
@@ -401,7 +408,7 @@ export function createEngine({ log = () => {}, get = httpGet, convert = toJpeg, 
     let total;
     if (feed.type === 'merge') {
       const pools = (feed.sources || []).map((sid) => feedState.get(`${prof.id}|${sid}`)?.pool ?? []);
-      all = sortNewest(applyFilters(pools.flat(), { ...feed.filters, dedupe: true, sort: 'feed' }).items);
+      all = sortNewest(applyFilters(pools.flat(), { ...feed.filters, dedupe: true, sort: 'feed' }, null, now()).items);
       total = all.length;
     } else {
       const res = await fetchFeed({ ...feed, folder: 'preview' });

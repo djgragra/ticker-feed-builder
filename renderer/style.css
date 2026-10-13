@@ -339,3 +339,23 @@ td.st .time { display: block; margin-top: 3px; }
 .planbox .inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .planbox .days { display: flex; gap: 10px; flex-wrap: wrap; }
 .planbox .day { display: inline-flex; align-items: center; gap: 4px; }
+
+/* guided update: banner and Settings → Updates share the same widget */
+.update-bar { align-items: flex-start; }
+.update-main { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.update-text { font-weight: 600; }
+.update-notes { white-space: pre-line; color: var(--muted); font-size: 12px; max-height: 6.5em; overflow: auto; }
+.update-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.update-actions:empty { display: none; }
+.update-progress { width: 100%; max-width: 420px; height: 10px; accent-color: var(--accent); }
+.update-panel { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); }
+.update-panel:empty { display: none; }
+/* password-like fields with a show / hide button */
+.reveal { display: flex; gap: 4px; align-items: center; }
+.reveal > input { flex: 1; min-width: 0; width: 100%; }
+.reveal-btn { flex: none; }
+table.feeds td.url .reveal { width: 100%; }
+table.feeds .reveal input { width: 0; flex: 1 1 0; }
+#whatsNewBody ul { margin: 8px 0 8px 18px; }
+.reveal-btn { padding: 5px 6px; }
+table.feeds td.url { min-width: 160px; }
