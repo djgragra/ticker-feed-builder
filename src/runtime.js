@@ -155,7 +155,7 @@ export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () 
   function digestNow() {
     const s = getSettings();
     const { text } = buildDigest(s, fullStatus(), now());
-    alerter.broadcast(text, `[Ticker Feed Builder] ${text.split('\n')[0]}`);
+    alerter.broadcast(text, text.split('\n')[0]);
     return text;
   }
 
@@ -182,7 +182,7 @@ export function createRuntime({ getSettings, log = () => {}, notifyDesktop = () 
     updateNotified = latest;
     saveStateSoon();
     const text = msg(s.language, 'update', latest, current, url);
-    alerter.broadcast(text, `[Ticker Feed Builder] ${text.split(/[:(]/)[0].trim()} ${latest}`);
+    alerter.broadcast(text, `${text.split(/[:(]/)[0].trim()} ${latest}`);
     return true;
   }
   return {

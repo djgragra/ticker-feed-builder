@@ -314,7 +314,14 @@ test('alerter: email and Telegram both get the alert (several recipients live in
   a.check('feed:1', false, { downText: () => 'Feed down. Details', upText: () => 'up' });
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(calls.map((c) => c[0]).sort(), ['mail', 'tg']);
-  assert.match(calls.find((c) => c[0] === 'mail')[1], /^\[Ticker Feed Builder\] Feed down/);
+  assert.match(calls.find((c) => c[0] === 'mail')[1], /^\[Ticker Feed Builder · [^\]]+\] Feed down/); // computer name when the installation has no name
+  settings.installationName = 'Studio 2';
+  calls.length = 0;
+  a.reset();
+  a.check('feed:1', false, { downText: () => 'Feed down. Details', upText: () => 'up' });
+  await new Promise((r) => setImmediate(r));
+  assert.match(calls.find((c) => c[0] === 'mail')[1], /^\[Ticker Feed Builder · Studio 2\] Feed down/);
+  assert.match(calls.find((c) => c[0] === 'tg')[1], /^\[Ticker Feed Builder · Studio 2\] Feed down/);
 });
 
 test('settings: email recipients are validated and de-duplicated; theme is checked; profile order can be changed', () => {

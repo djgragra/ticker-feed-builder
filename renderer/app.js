@@ -11,7 +11,8 @@ const state = {
   logs: [],
   logFilter: 'all',
   info: {},
-  update: null
+  settingsTab: 'general',
+  updateUi: { phase: 'idle', info: null, banner: 'none', lastCheck: null, received: 0, total: 0, error: '', busy: [], hint: '' }
 };
 const t = (key, vars) => I18N.t(state.settings ? state.settings.language : 'en', key, vars);
 
@@ -49,7 +50,8 @@ const ICONS = {
   alert: 'M12 4l9 16H3zM12 10v4M12 17v.01',
   pulse: 'M3 12h4l3-8 4 16 3-8h4',
   layers: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5',
-  pause: 'M8 5v14M16 5v14'
+  pause: 'M8 5v14M16 5v14',
+  eyeoff: 'M3 3l18 18M10.6 6.2A9.6 9.6 0 0 1 12 6c6 0 10 6 10 6a17 17 0 0 1-3.2 3.9M6.5 7.5A17 17 0 0 0 2 12s4 7 10 7a9.5 9.5 0 0 0 4-.9M9.9 9.9a3 3 0 0 0 4.2 4.2'
 };
 function icon(name, size = 16) {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -59,6 +61,22 @@ function icon(name, size = 16) {
   svg.append(path);
   return svg;
 }
+
+// A password-like field with a "show / hide" button. `shownType` is the type while it is visible.
+function withReveal(input, { shownType = 'text', hidden = true } = {}) {
+  input.type = hidden ? 'password' : shownType;
+  const btn = h('button', { type: 'button', class: 'btn small icon-btn reveal-btn' });
+  const paint = () => {
+    const masked = input.type === 'password';
+    btn.replaceChildren(icon(masked ? 'eye' : 'eyeoff'));
+    btn.title = btn['aria-label'] = t(masked ? 'common.showPw' : 'common.hidePw');
+    btn.setAttribute('aria-label', btn.title);
+  };
+  btn.addEventListener('click', () => { input.type = input.type === 'password' ? shownType : 'password'; paint(); });
+  paint();
+  return h('span', { class: 'reveal' }, input, btn);
+}
+const hasCredentials = (url) => /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*@/i.test(String(url || ''));
 // the state of a profile or feed in words (colour alone is not enough for everybody)
 const STATE_KEY = { ok: 'state.ok', warn: 'state.warn', bad: 'state.bad', run: 'state.run', '': 'state.wait' };
 const hue = (text) => { let n = 0; for (const c of String(text)) n = (n * 31 + c.charCodeAt(0)) % 6; return n; };
@@ -307,7 +325,10 @@ function feedsTab(p, change) {
         h('input', { type: 'text', value: f.folder, maxLength: 100, 'aria-label': t('f.folder'), onchange: (e) => { f.folder = e.target.value; change(); } }))),
       h('td', { class: 'url' }, merge
         ? h('span', { class: 'hint', text: f.sources.length ? t('f.mergeOf', { names: f.sources.map(nameOf).join(', ') }) : t('f.mergeNone') })
-        : h('input', { type: 'url', value: f.url, spellcheck: false, placeholder: 'https://…', 'aria-label': t('f.url'), onchange: (e) => { f.url = e.target.value.trim(); change(); } })),
+        : (() => {
+            const inp = h('input', { type: 'url', value: f.url, spellcheck: false, placeholder: 'https://…', 'aria-label': t('f.url'), onchange: (e) => { f.url = e.target.value.trim(); if (hasCredentials(f.url) && inp.type === 'url') inp.type = 'password'; change(); } });
+            return withReveal(inp, { shownType: 'url', hidden: hasCredentials(f.url) });
+          })()),
       h('td', {}, h('input', { type: 'number', min: 1, max: 100, value: f.maxItems, 'aria-label': t('f.max'), onchange: (e) => { f.maxItems = Number(e.target.value); change(); } })),
       h('td', {}, merge ? null : h('input', { type: 'number', min: 0, max: 1440, value: f.intervalMin || '', placeholder: String(p.intervalMin), title: t('f.everyHint'), 'aria-label': t('f.every'), onchange: (e) => { f.intervalMin = Number(e.target.value) || 0; change(); } })),
       h('td', {}, merge ? null : h('input', { type: 'checkbox', checked: f.insecureTls, 'aria-label': t('f.tls'), title: t('f.tlsHint'), onchange: (e) => { f.insecureTls = e.target.checked; change(); } })),
@@ -318,7 +339,7 @@ function feedsTab(p, change) {
         h('button', { class: 'btn small icon-btn danger', title: t('f.remove'), 'aria-label': t('f.remove'), onclick: () => { p.feeds = p.feeds.filter((x) => x.id !== f.id); for (const m of p.feeds) m.sources = (m.sources || []).filter((sid) => sid !== f.id); change(); renderMain(); } }, icon('x'))))
     );
   });
-  const addFeed = (type) => { p.feeds.push({ id: crypto.randomUUID(), type, folder: type === 'merge' ? 'Latest' : `Feed${p.feeds.length + 1}`, url: '', sources: type === 'merge' ? p.feeds.filter((x) => x.type === 'feed').map((x) => x.id) : [], maxItems: type === 'merge' ? 15 : 10, intervalMin: 0, staleHours: 0, filters: { include: [], exclude: [], scope: 'both', sort: 'feed', dedupe: false }, enabled: true, insecureTls: false }); change(); renderMain(); };
+  const addFeed = (type) => { p.feeds.push({ id: crypto.randomUUID(), type, folder: type === 'merge' ? 'Latest' : `Feed${p.feeds.length + 1}`, url: '', sources: type === 'merge' ? p.feeds.filter((x) => x.type === 'feed').map((x) => x.id) : [], maxItems: type === 'merge' ? 15 : 10, intervalMin: 0, staleHours: 0, filters: { include: [], exclude: [], scope: 'both', sort: 'feed', dedupe: false, maxAgeHours: 0, undated: 'keep' }, enabled: true, insecureTls: false }); change(); renderMain(); };
   return h('div', {},
     p.feeds.length
       ? h('table', { class: 'feeds' },
@@ -342,6 +363,17 @@ function openFeedDialog(p, f, change) {
   const merge = f.type === 'merge';
   const words = (key) => h('textarea', { rows: 3, spellcheck: false, value: fl[key].join('\n'), onchange: (e) => { fl[key] = splitWords(e.target.value); change(); } });
   const sel = (get, set, opts) => h('select', { onchange: (e) => { set(e.target.value); change(); } }, opts.map(([v, k]) => h('option', { value: v, selected: get() === v, text: t(k) })));
+  // "not older than": stored in hours; shown in days when it is a whole number of days
+  const ageRow = () => {
+    const days = fl.maxAgeHours > 0 && fl.maxAgeHours % 24 === 0;
+    const num = h('input', { type: 'number', min: 0, max: 8760, value: fl.maxAgeHours ? (days ? fl.maxAgeHours / 24 : fl.maxAgeHours) : '', placeholder: t('fo.maxAgeOff') });
+    const unit = h('select', {}, h('option', { value: 'h', selected: !days, text: t('fo.hours') }), h('option', { value: 'd', selected: days, text: t('fo.days') }));
+    const save = () => { const n = Math.max(0, Math.round(Number(num.value) || 0)); fl.maxAgeHours = Math.min(8760, unit.value === 'd' ? n * 24 : n); change(); };
+    num.onchange = save;
+    unit.onchange = save;
+    const undated = h('select', { onchange: (e) => { fl.undated = e.target.value; change(); } }, h('option', { value: 'keep', selected: fl.undated !== 'drop', text: t('fo.undatedKeep') }), h('option', { value: 'drop', selected: fl.undated === 'drop', text: t('fo.undatedDrop') }));
+    return h('div', {}, h('div', { class: 'row' }, num, unit), h('div', { class: 'row' }, h('span', { class: 'hint', text: t('fo.undated') }), undated), h('p', { class: 'hint', text: t('fo.maxAgeHint') }));
+  };
   const rowsDom = [];
   if (merge) {
     rowsDom.push(h('div', { class: 'sec' }, h('h3', { text: t('fo.sources') }), h('p', { class: 'hint', text: t('fo.sourcesHint') }),
@@ -353,7 +385,8 @@ function openFeedDialog(p, f, change) {
       h('label', { text: t('fo.exclude') }), words('exclude'),
       h('label', { text: t('fo.scope') }), sel(() => fl.scope, (v) => { fl.scope = v; }, [['both', 'fo.scopeBoth'], ['title', 'fo.scopeTitle']]),
       merge ? null : h('label', { text: t('fo.sort') }), merge ? null : sel(() => fl.sort, (v) => { fl.sort = v; }, [['feed', 'fo.sortFeed'], ['newest', 'fo.sortNewest']]),
-      merge ? null : h('span', {}), merge ? null : h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: fl.dedupe, onchange: (e) => { fl.dedupe = e.target.checked; change(); } }), h('span', { text: t('fo.dedupe') })))));
+      merge ? null : h('span', {}), merge ? null : h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: fl.dedupe, onchange: (e) => { fl.dedupe = e.target.checked; change(); } }), h('span', { text: t('fo.dedupe') })),
+      h('label', { text: t('fo.maxAge') }), ageRow())));
   rowsDom.push(h('div', { class: 'sec' }, h('h3', { text: t('o.checks') }),
     h('div', { class: 'check' }, h('span', { text: t('fo.stale') }), h('input', { type: 'number', min: 0, max: 720, value: f.staleHours || '', placeholder: String(p.staleHours), onchange: (e) => { f.staleHours = Number(e.target.value) || 0; change(); } }), h('span', { class: 'hint', text: t('fo.staleHint') }))));
   $('#feedBody').replaceChildren(...rowsDom);
@@ -734,76 +767,258 @@ function renderSettings() {
     cmdApp.textContent = info.platform === 'win32' ? `set ELECTRON_RUN_AS_NODE=1\n${q(info.exe)} ${q(info.script)} ${tail}` : `ELECTRON_RUN_AS_NODE=1 ${q(info.exe)} ${q(info.script)} ${tail}`;
     cmdNode.textContent = `node src/cli.js --settings <exported-settings.json> --data ./tfb-data`;
   });
-  $('#settingsBody').replaceChildren(
-    h('div', { class: 'sec' }, h('h3', { text: t('s.general') }),
-      gen('startOnBoot', 's.startOnBoot'), gen('startMinimized', 's.startMinimized'), gen('runOnLaunch', 's.runOnLaunch'), gen('staggerProfiles', 's.stagger'), h('p', { class: 'hint', text: t('s.staggerHint') }), gen('keepAwake', 's.keepAwake'), gen('rememberState', 's.remember'),
-      h('div', { class: 'check' }, h('span', { text: t('s.logDays') }), h('input', { type: 'number', min: 1, max: 365, value: g.logRetentionDays, onchange: (e) => patchSettings({ general: { logRetentionDays: Number(e.target.value) } }) }), h('span', { text: t('s.days') }))),
-    h('div', { class: 'sec' }, h('h3', { text: t('s.alerts') }),
-      h('p', { class: 'hint', text: t('s.alertsHint') }),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: n.desktop, onchange: (e) => patchSettings({ notifications: { desktop: e.target.checked } }) }), h('span', { text: t('s.desktop') })),
-      h('div', { class: 'check' }, h('span', { text: t('s.threshold') }), h('input', { type: 'number', min: 1, max: 100, value: n.failThreshold, onchange: (e) => patchSettings({ notifications: { failThreshold: Number(e.target.value) } }) }), h('span', { text: t('s.failures') })),
-      h('p', { class: 'hint', text: t('set.n.local') }),
+  const instInput = h('input', { type: 'text', value: s.installationName, maxLength: 60, placeholder: state.info.computerName || '', onchange: (e) => patchSettings({ installationName: e.target.value.trim() }) });
+  const SECTIONS = [
+    ['general', () => [
+      h('div', { class: 'sec' }, h('h3', { text: t('s.general') }),
+        gen('startOnBoot', 's.startOnBoot'), gen('startMinimized', 's.startMinimized'), gen('runOnLaunch', 's.runOnLaunch'), gen('staggerProfiles', 's.stagger'), h('p', { class: 'hint', text: t('s.staggerHint') }), gen('keepAwake', 's.keepAwake'), gen('rememberState', 's.remember'),
+        h('label', { class: 'field' }, h('span', { text: t('s.instName') }), instInput), h('p', { class: 'hint', text: t('s.instHint', { name: state.info.computerName || '' }) }),
+        h('div', { class: 'check' }, h('span', { text: t('s.logDays') }), h('input', { type: 'number', min: 1, max: 365, value: g.logRetentionDays, onchange: (e) => patchSettings({ general: { logRetentionDays: Number(e.target.value) } }) }), h('span', { text: t('s.days') })))]],
+    ['headless', () => [
+      h('div', { class: 'sec' }, h('h3', { text: t('s.headless') }),
+        h('p', { class: 'hint', text: t('s.headlessText') }),
+        h('div', { class: 'hint', text: t('s.headlessApp') }), cmdApp, h('button', { class: 'btn small', text: t('s.headlessCopy'), onclick: () => copyText(cmdApp.textContent, msgBox) }),
+        h('div', { class: 'hint', text: t('s.headlessNode') }), cmdNode, h('button', { class: 'btn small', text: t('s.headlessCopy'), onclick: () => copyText(cmdNode.textContent, msgBox) }),
+        h('p', { class: 'hint', text: t('s.headlessEnv') }))]],
+    ['alerts', () => [
+      h('div', { class: 'sec' }, h('h3', { text: t('s.alerts') }),
+        h('p', { class: 'hint', text: t('s.alertsHint') }),
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: n.desktop, onchange: (e) => patchSettings({ notifications: { desktop: e.target.checked } }) }), h('span', { text: t('s.desktop') })),
+        h('div', { class: 'check' }, h('span', { text: t('s.threshold') }), h('input', { type: 'number', min: 1, max: 100, value: n.failThreshold, onchange: (e) => patchSettings({ notifications: { failThreshold: Number(e.target.value) } }) }), h('span', { text: t('s.failures') })),
+        h('p', { class: 'hint', text: t('set.n.local') }),
 
-      h('h4', { class: 'sub', text: t('set.mail.title') }),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: em.enabled, onchange: (e) => mail({ enabled: e.target.checked }) }), h('span', { text: t('set.mail.enable') })),
-      h('div', { class: 'cols' }, field('set.mail.host', mHost), field('set.mail.port', mPort), field('set.mail.user', mUser), field('set.mail.pass', mPass), field('set.mail.from', mFrom), field('set.mail.to', mTo)),
-      h('label', { class: 'check' }, mSecure, h('span', { text: t('set.mail.secure') })),
-      h('p', { class: 'hint', text: t('s.emailNote') }),
-      h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn small', id: 'mTest', text: t('set.test'), onclick: () => runTest(mRes, async () => { await saveEmailRecipients(); return api.email.test({ host: mHost.value.trim(), port: Number(mPort.value) || 587, secure: mSecure.checked, user: mUser.value.trim(), pass: mPass.value, from: mFrom.value.trim(), recipients: typedAddresses() }); }) }), mRes),
+        h('h4', { class: 'sub', text: t('set.mail.title') }),
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: em.enabled, onchange: (e) => mail({ enabled: e.target.checked }) }), h('span', { text: t('set.mail.enable') })),
+        h('div', { class: 'cols' }, field('set.mail.host', mHost), field('set.mail.port', mPort), field('set.mail.user', mUser), field('set.mail.pass', withReveal(mPass)), field('set.mail.from', mFrom), field('set.mail.to', mTo)),
+        h('label', { class: 'check' }, mSecure, h('span', { text: t('set.mail.secure') })),
+        h('p', { class: 'hint', text: t('s.emailNote') }),
+        h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn small', id: 'mTest', text: t('set.test'), onclick: () => runTest(mRes, async () => { await saveEmailRecipients(); return api.email.test({ host: mHost.value.trim(), port: Number(mPort.value) || 587, secure: mSecure.checked, user: mUser.value.trim(), pass: mPass.value, from: mFrom.value.trim(), recipients: typedAddresses() }); }) }), mRes),
 
-      h('h4', { class: 'sub', text: t('set.tg.title') }),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: tg.enabled, onchange: (e) => patchSettings({ notifications: { telegram: { enabled: e.target.checked } } }) }), h('span', { text: t('set.tg.enable') })),
-      field('set.tg.token', tToken),
-      h('div', { class: 'field' }, h('span', { text: t('set.tg.recipients') }), tRecipients, h('div', {}, h('button', { type: 'button', class: 'btn small', id: 'tAdd', text: t('set.tg.add'), onclick: () => addRecipientRow() }))),
-      h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn small', id: 'tTest', text: t('set.test'), onclick: () => runTest(tRes, () => api.telegram.test({ botToken: tToken.value.trim(), recipients: readRecipients() })) }), tRes),
+        h('h4', { class: 'sub', text: t('set.tg.title') }),
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: tg.enabled, onchange: (e) => patchSettings({ notifications: { telegram: { enabled: e.target.checked } } }) }), h('span', { text: t('set.tg.enable') })),
+        field('set.tg.token', withReveal(tToken)),
+        h('div', { class: 'field' }, h('span', { text: t('set.tg.recipients') }), tRecipients, h('div', {}, h('button', { type: 'button', class: 'btn small', id: 'tAdd', text: t('set.tg.add'), onclick: () => addRecipientRow() }))),
+        h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn small', id: 'tTest', text: t('set.test'), onclick: () => runTest(tRes, () => api.telegram.test({ botToken: tToken.value.trim(), recipients: readRecipients() })) }), tRes),
 
-      h('h4', { class: 'sub', text: t('s.digest') }),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: dg.enabled, onchange: (e) => patchSettings({ notifications: { digest: { enabled: e.target.checked } } }) }), h('span', { text: t('s.digestOn') })),
-      h('div', { class: 'check' }, h('span', { text: t('s.digestTimes') }), h('input', { type: 'text', value: dg.times.join(', '), size: 22, onchange: async (e) => { const next = await patchSettings({ notifications: { digest: { times: e.target.value.split(/[\s,;]+/).filter(Boolean) } } }); e.target.value = next.notifications.digest.times.join(', '); } })),
-      h('button', { class: 'btn', text: t('s.digestNow'), onclick: async () => { const nn = state.settings.notifications; if (!nn.telegram.enabled && !nn.email.enabled) { msgBox.textContent = t('s.digestNone'); return; } await api.digest.send(); msgBox.textContent = t('s.digestSent'); } })),
-    h('div', { class: 'sec' }, h('h3', { text: t('s.backup') }),
-      h('div', { class: 'toolbar' },
-        h('button', { class: 'btn', text: t('s.export'), onclick: async () => { const r = await api.settings.export(); if (r.ok) msgBox.textContent = t('s.exported', { f: r.file }); } }),
-        h('button', { class: 'btn', text: t('s.import'), onclick: async () => { const r = await api.settings.import(); if (r.ok) { state.settings = r.settings; state.sel = state.settings.profiles[0]?.id || null; state.view = 'dash'; applyLang(); msgBox.textContent = t('s.importOk'); } else if (r.error) msgBox.textContent = r.error; } })),
-      h('p', { class: 'hint', text: t('s.backupNote') })),
-    h('div', { class: 'sec' }, h('h3', { text: t('s.headless') }),
-      h('p', { class: 'hint', text: t('s.headlessText') }),
-      h('div', { class: 'hint', text: t('s.headlessApp') }), cmdApp, h('button', { class: 'btn small', text: t('s.headlessCopy'), onclick: () => copyText(cmdApp.textContent, msgBox) }),
-      h('div', { class: 'hint', text: t('s.headlessNode') }), cmdNode, h('button', { class: 'btn small', text: t('s.headlessCopy'), onclick: () => copyText(cmdNode.textContent, msgBox) }),
-      h('p', { class: 'hint', text: t('s.headlessEnv') })),
-    h('div', { class: 'sec' }, h('h3', { text: t('s.updates') }),
-      gen('checkUpdates', 's.checkUpdates'),
-      h('label', { class: 'check' },
-        h('input', { type: 'checkbox', checked: n.updateAlert, disabled: !n.telegram.enabled && !n.email.enabled, onchange: (e) => patchSettings({ notifications: { updateAlert: e.target.checked } }) }),
-        h('span', { text: t('s.updateAlert') })),
-      h('button', { class: 'btn', text: t('s.checkNow'), onclick: async () => { const r = await checkUpdate(true); msgBox.textContent = !r.ok ? t('s.updateErr', { e: r.error }) : r.noRelease ? t('s.noRelease') : r.available ? t('update.available', { v: r.latest, c: r.current }) : t('s.upToDate'); } })),
-    msgBox);
+        h('h4', { class: 'sub', text: t('s.digest') }),
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: dg.enabled, onchange: (e) => patchSettings({ notifications: { digest: { enabled: e.target.checked } } }) }), h('span', { text: t('s.digestOn') })),
+        h('div', { class: 'check' }, h('span', { text: t('s.digestTimes') }), h('input', { type: 'text', value: dg.times.join(', '), size: 22, onchange: async (e) => { const next = await patchSettings({ notifications: { digest: { times: e.target.value.split(/[\s,;]+/).filter(Boolean) } } }); e.target.value = next.notifications.digest.times.join(', '); } })),
+        h('button', { class: 'btn', text: t('s.digestNow'), onclick: async () => { const nn = state.settings.notifications; if (!nn.telegram.enabled && !nn.email.enabled) { msgBox.textContent = t('s.digestNone'); return; } await api.digest.send(); msgBox.textContent = t('s.digestSent'); } }))]],
+    ['updates', () => [updatesSection()]],
+    ['backup', () => [backupSection(msgBox)]],
+    ['about', () => [aboutSection(msgBox)]]
+  ];
+  if (!SECTIONS.some(([k]) => k === state.settingsTab)) state.settingsTab = 'general';
+  const tabs = h('div', { class: 'tabs', role: 'tablist' }, ...SECTIONS.map(([k]) => h('button', { class: 'tab' + (state.settingsTab === k ? ' sel' : ''), role: 'tab', 'aria-selected': state.settingsTab === k, text: t('st.' + k), onclick: () => { state.settingsTab = k; renderSettings(); } })));
+  $('#settingsBody').replaceChildren(tabs, ...SECTIONS.find(([k]) => k === state.settingsTab)[1](), msgBox);
+  renderUpdate();
 }
 
-// ---- updates --------------------------------------------------------------------------------------
-async function checkUpdate(manual) {
-  const r = await api.update.check();
-  state.update = r;
+// ---- settings: updates, backup, help & about -------------------------------------------------------------
+function updatesSection() {
+  const g = state.settings.general;
+  const n = state.settings.notifications;
+  const gen = (key, label) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: g[key], onchange: async (e) => { await patchSettings({ general: { [key]: e.target.checked } }); } }), h('span', { text: t(label) }));
+  const last = state.updateUi.lastCheck;
+  return h('div', { class: 'sec' }, h('h3', { text: t('s.updates') }),
+    gen('checkUpdates', 's.checkUpdates'),
+    h('label', { class: 'check' },
+      h('input', { type: 'checkbox', checked: n.updateAlert, disabled: !n.telegram.enabled && !n.email.enabled, onchange: (e) => patchSettings({ notifications: { updateAlert: e.target.checked } }) }),
+      h('span', { text: t('s.updateAlert') })),
+    h('div', { class: 'update-panel', id: 'updatePanel' }),
+    h('p', { class: 'hint', id: 'updateLast', text: last ? t('update.lastCheck', { when: new Date(last.at).toLocaleString(state.settings.language), result: last.ok ? t('update.lastOk') : t('update.lastFail', { e: last.error }) }) : t('update.neverChecked') }),
+    h('div', { class: 'toolbar' }, h('button', { class: 'btn', text: t('s.checkNow'), onclick: () => checkUpdate(true) })));
+}
+
+const BACKUP_ERRORS = ['invalid', 'wrong-app', 'too-big'];
+function backupSection(msgBox) {
+  const incl = h('input', { type: 'checkbox', id: 'bkSecrets' });
+  const warn = h('div', { class: 'alert-line', role: 'alert', hidden: true, text: t('b.warning') });
+  incl.onchange = () => { warn.hidden = !incl.checked; };
+  const mode = (value, label, checked) => h('label', { class: 'check' }, h('input', { type: 'radio', name: 'bkMode', value, checked }), h('span', { text: t(label) }));
+  const result = h('div', { class: 'hint', id: 'bkResult', role: 'status' });
+  const showMissing = (missing) => {
+    if (!missing.length) return null;
+    const label = (m) => m.kind === 'email.pass' ? t('b.m.email') : m.kind === 'telegram.botToken' ? t('b.m.telegram') : t('b.m.feed', { name: m.name });
+    return h('div', { class: 'alert-line' }, h('strong', { text: t('b.retype') }), h('ul', {}, missing.map((m) => h('li', { text: label(m) }))));
+  };
+  return h('div', { class: 'sec' }, h('h3', { text: t('b.title') }),
+    h('p', { class: 'hint', text: t('b.note') }),
+    h('label', { class: 'check' }, incl, h('span', { text: t('b.include') })),
+    warn,
+    h('div', { class: 'toolbar' },
+      h('button', { class: 'btn', text: t('b.export'), onclick: async () => {
+        const r = await api.backup.export(incl.checked);
+        result.replaceChildren(r.ok ? t('b.exported', { f: r.file }) + (r.includesSecrets ? ' ' + t('b.exportedSecrets') : '') : r.error ? t('b.err.generic', { e: r.error }) : '');
+      } })),
+    h('h4', { class: 'sub', text: t('b.importTitle') }),
+    mode('replace', 'b.modeReplace', true), mode('add', 'b.modeAdd', false),
+    h('div', { class: 'toolbar' },
+      h('button', { class: 'btn', text: t('b.import'), onclick: async () => {
+        const chosen = document.querySelector('input[name=bkMode]:checked')?.value || 'replace';
+        if (chosen === 'replace' && !(await confirmDlg(t('b.confirmTitle'), t('b.confirmText'), t('b.confirmOk')))) return;
+        const r = await api.backup.import(chosen);
+        if (!r.ok) { result.replaceChildren(r.error ? (BACKUP_ERRORS.includes(r.error) ? t('b.err.' + r.error) : t('b.err.generic', { e: r.error })) : ''); return; }
+        state.settings = r.settings;
+        state.sel = state.settings.profiles.find((p) => p.id === state.sel)?.id || state.settings.profiles[0]?.id || null;
+        state.view = 'dash';
+        applyLang();
+        const after = $('#bkResult');
+        after?.replaceChildren(chosen === 'add' ? t('b.addedN', { n: r.added ?? 0 }) : t('b.importOk'), showMissing(r.missing || []));
+      } })),
+    result,
+    h('p', { class: 'hint', text: t('b.neverIn') }));
+}
+
+const CREDITS = [['Electron', 'MIT'], ['Jimp', 'MIT'], ['fast-xml-parser', 'MIT'], ['iconv-lite', 'MIT'], ['Nodemailer', 'MIT-0'], ['@jsquash/avif, @jsquash/webp', 'Apache-2.0']];
+function aboutSection(msgBox) {
+  const info = state.info;
+  const link = (text, url) => h('a', { href: '#', text, onclick: (e) => { e.preventDefault(); api.openExternal(url); } });
+  return h('div', { class: 'sec' }, h('h3', { text: t('st.about') }),
+    h('p', {}, h('strong', { text: 'Ticker Feed Builder' }), ` ${info.version}`),
+    h('p', { class: 'hint', text: `${info.platform} ${info.arch || ''} · ${t('ab.license')}: MIT` }),
+    h('p', {}, link(t('ab.toolPage'), 'https://onairgarage.com/tools/ticker-feed-builder/'), ' · ', link(t('ab.releases'), 'https://github.com/djgragra/ticker-feed-builder/releases'), ' · ', h('a', { href: '#', text: t('ab.manual'), onclick: (e) => { e.preventDefault(); $('#dlgSettings').close(); $('#dlgHelp').showModal(); } }), ' · hello@onairgarage.com'),
+    h('h4', { class: 'sub', text: t('ab.credits') }),
+    h('ul', {}, CREDITS.map(([n, l]) => h('li', { text: `${n} — ${l}` }))),
+    h('h4', { class: 'sub', text: t('ab.privacy') }),
+    h('p', { class: 'hint', text: t('ab.privacyText') }),
+    h('p', { class: 'hint', text: t('ab.unsigned') }),
+    h('div', { class: 'toolbar' },
+      h('button', { class: 'btn', text: t('ab.copy'), onclick: async () => {
+        const text = await api.supportInfo();
+        try { await navigator.clipboard.writeText(text); msgBox.textContent = t('ab.copied'); } catch { msgBox.textContent = text; }
+      } }),
+      h('button', { class: 'btn', text: t('ab.logs'), onclick: () => api.logs.openFolder() }),
+      h('button', { class: 'btn', text: t('s.checkNow'), onclick: () => checkUpdate(true) })));
+}
+
+// ---- updates (guided update, apps/COMMON-FEATURES.md section 4) ----------------------------------------
+// One state for the banner and for Settings → Updates: phase = idle | available | downloading | ready | error | busy | installed
+const U = state.updateUi;
+const mb = (n) => (n / 1048576).toFixed(1);
+
+function applyUpdateView(view) {
+  U.info = view.info;
+  U.banner = view.banner;
+  U.lastCheck = view.lastCheck;
+  if (['downloading', 'busy', 'installed'].includes(U.phase)) return renderUpdate();
+  if (view.downloaded) U.phase = 'ready';
+  else if (view.info?.ok && view.info.available) U.phase = 'available';
+  else U.phase = view.info?.ok === false ? 'error' : 'idle';
+  U.error = view.info?.ok === false ? view.info.error : '';
+  renderUpdate();
+}
+
+function updateWidget(inSettings) {
+  const v = U.info?.latest;
+  const btn = (label, fn, primary) => h('button', { type: 'button', class: 'btn small' + (primary ? ' primary' : ''), text: t(label), onclick: fn });
+  const notesBtn = btn('update.notes', () => U.info?.url && api.openExternal(U.info.url));
+  const kids = [];
+  const actions = [];
+  switch (U.phase) {
+    case 'available':
+      kids.push(h('span', { class: 'update-text', text: t('update.available', { v, c: U.info.current }) }));
+      if (U.info.notes) kids.push(h('div', { class: 'update-notes', text: U.info.notes }));
+      if (inSettings && U.banner === 'skipped') kids.push(h('div', { class: 'hint', text: t('update.skippedNote', { v }) }));
+      if (inSettings && U.banner === 'snoozed') kids.push(h('div', { class: 'hint', text: t('update.snoozedNote') }));
+      if (U.info.installer) actions.push(btn('update.downloadInstall', startDownload, true));
+      else kids.push(h('div', { class: 'hint', text: t('update.noInstaller') }));
+      if (U.banner === 'show') {
+        actions.push(btn('update.later', async () => applyUpdateView(await api.update.remind())));
+        actions.push(btn('update.skip', async () => applyUpdateView(await api.update.skip())));
+      }
+      actions.push(notesBtn);
+      break;
+    case 'downloading': {
+      const pct = U.total ? Math.round((U.received / U.total) * 100) : null;
+      kids.push(h('span', { class: 'update-text', text: t('update.progress', { p: pct ?? '…' }) + (U.total ? ` · ${mb(U.received)} / ${mb(U.total)} MB` : '') }));
+      kids.push(h('progress', { class: 'update-progress', max: 100, value: pct ?? undefined }));
+      actions.push(btn('update.cancel', () => api.update.cancel()));
+      break;
+    }
+    case 'ready':
+      kids.push(h('span', { class: 'update-text', text: t('update.ready', { v: v || '' }) }));
+      kids.push(h('div', { class: 'hint', text: t('update.readyHint_' + (state.info.platform === 'win32' ? 'win' : state.info.platform === 'darwin' ? 'mac' : 'linux')) }));
+      actions.push(btn('update.install', installNow, true), btn('update.reveal', () => api.update.reveal()), notesBtn);
+      break;
+    case 'busy':
+      kids.push(h('span', { class: 'update-text', text: t('update.busy', { names: U.busy.join(', ') }) }));
+      actions.push(btn('update.tryAgain', installNow, true));
+      break;
+    case 'installed':
+      kids.push(h('span', { class: 'update-text', text: t('update.hint_' + U.hint) }));
+      actions.push(btn('update.reveal', () => api.update.reveal()));
+      break;
+    case 'error':
+      kids.push(h('span', { class: 'update-text', text: t('update.err', { e: U.error }) }));
+      if (U.info?.available && U.info.installer) actions.push(btn('update.tryAgain', startDownload, true));
+      break;
+    default:
+      if (inSettings && U.info?.ok) kids.push(h('span', { class: 'hint', text: U.info.noRelease ? t('s.noRelease') : t('s.upToDate') }));
+  }
+  return [...kids, h('div', { class: 'update-actions' }, actions)];
+}
+
+function renderUpdate() {
   const bar = $('#updateBar');
-  if (r.ok && r.available) {
-    $('#updateText').textContent = t('update.available', { v: r.latest, c: r.current });
-    $('#updateDownload').hidden = !r.installer;
-    bar.hidden = false;
-  } else if (!manual) bar.hidden = true;
-  return r;
+  const visible = ['downloading', 'ready', 'busy', 'installed', 'error'].includes(U.phase) ? !(U.phase === 'error' && !U.info?.available) : U.phase === 'available' && U.banner === 'show';
+  bar.hidden = !visible;
+  if (visible) bar.replaceChildren(h('div', { class: 'update-main' }, ...updateWidget(false)));
+  const panel = $('#updatePanel');
+  if (panel) panel.replaceChildren(...updateWidget(true));
+  const last = $('#updateLast');
+  if (last) last.textContent = U.lastCheck ? t('update.lastCheck', { when: new Date(U.lastCheck.at).toLocaleString(state.settings.language), result: U.lastCheck.ok ? t('update.lastOk') : t('update.lastFail', { e: U.lastCheck.error }) }) : t('update.neverChecked');
 }
-$('#updateClose').onclick = () => { $('#updateBar').hidden = true; };
-$('#updateNotes').onclick = () => state.update?.url && api.openExternal(state.update.url);
-$('#updateDownload').onclick = async () => {
-  const btn = $('#updateDownload');
-  btn.disabled = true;
-  const off = api.update.onProgress((got, total) => { $('#updateText').textContent = t('update.progress', { p: total ? Math.round((got / total) * 100) : '…' }); });
+
+async function checkUpdate(manual) {
+  const view = await api.update.check();
+  applyUpdateView(view);
+  if (manual) {
+    const box = $('#setMsg');
+    if (box) box.textContent = !view.info.ok ? t('s.updateErr', { e: view.info.error }) : view.info.noRelease ? t('s.noRelease') : view.info.available ? '' : t('s.upToDate');
+  }
+  return view;
+}
+
+async function startDownload() {
+  U.phase = 'downloading';
+  U.received = 0;
+  U.total = 0;
+  renderUpdate();
+  const off = api.update.onProgress((got, total) => { U.received = got; U.total = total; renderUpdate(); });
   const r = await api.update.download();
   off();
-  btn.disabled = false;
-  $('#updateText').textContent = r.ok ? t('update.done', { f: r.file }) : t('update.err', { e: r.error });
-  if (r.ok) { btn.textContent = t('update.reveal'); btn.onclick = () => api.update.reveal(r.file); }
-};
+  if (r.ok) U.phase = 'ready';
+  else if (r.error === 'cancelled') U.phase = 'available';
+  else { U.phase = 'error'; U.error = r.error; }
+  renderUpdate();
+}
+
+async function installNow() {
+  const r = await api.update.install();
+  if (r.ok) {
+    if (r.hint) { U.phase = 'installed'; U.hint = r.hint; renderUpdate(); }
+    return;
+  }
+  if (r.error === 'busy') { U.phase = 'busy'; U.busy = r.busy || []; }
+  else { U.phase = 'error'; U.error = r.error; }
+  renderUpdate();
+}
+
+// ---- what's new after an update ------------------------------------------------------------------------
+async function showWhatsNew() {
+  const wn = await api.whatsNew.get();
+  if (!wn) return;
+  $('#whatsNewTitle').textContent = t('wn.title', { v: wn.version }) + (wn.date ? ` · ${wn.date}` : '');
+  $('#whatsNewBody').replaceChildren(
+    wn.bullets.length ? h('ul', {}, wn.bullets.map((b) => h('li', { text: b }))) : h('p', { class: 'hint', text: t('wn.none') }),
+    h('p', { class: 'hint', text: t('wn.english') }));
+  const dlg = $('#dlgWhatsNew');
+  dlg.onclose = () => { dlg.onclose = null; api.whatsNew.seen(); };
+  dlg.showModal();
+}
+$('#whatsNewOk').onclick = () => $('#dlgWhatsNew').close();
+$('#whatsNewNotes').onclick = () => api.openExternal('https://github.com/djgragra/ticker-feed-builder/releases');
 
 // ---- wiring -----------------------------------------------------------------------------------------
 const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -863,8 +1078,9 @@ $('#newCreate').onclick = async () => {
       }
     }
   });
+  showWhatsNew();
   if (state.settings.general.checkUpdates) {
-    setTimeout(() => checkUpdate(false), 5000);
-    setInterval(() => state.settings.general.checkUpdates && checkUpdate(false), 6 * 3600_000);
+    setTimeout(() => checkUpdate(false), 15_000); // 15 s after the start, then every 24 hours
+    setInterval(() => state.settings.general.checkUpdates && checkUpdate(false), 24 * 3600_000);
   }
 })();

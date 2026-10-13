@@ -6,6 +6,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DEFAULT_FORMAT, safeName, sanitizeFormat } from './format.js';
 import { isTime, PLAN_MODES } from './schedule-rules.js';
+import { mapSecrets } from './secrets.js';
 
 export const MAX_PROFILES = 20;
 export const MAX_FEEDS = 100;
@@ -18,7 +19,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     startMinimized: false,
     runOnLaunch: true, // start the schedules as soon as the app opens
     keepAwake: true, // do not let the computer sleep: a sleeping computer stops updating the ticker
-    logRetentionDays: 30,
+    logRetentionDays: 7, // log files are kept this many days (up to 5 MB each)
     checkUpdates: true,
     staggerProfiles: false, // spread profiles that share an interval evenly inside it (two profiles every 5 min: 2:30 apart)
     rememberState: true // keep what each feed looked like across restarts (no needless downloads after a restart)
@@ -32,7 +33,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
     email: { enabled: false, host: '', port: 587, secure: false, user: '', pass: '', from: '', recipients: [] } // recipients: [address]
   },
   theme: 'dark', // 'dark' | 'light' | 'auto' (follow the system)
-  closeHintShown: false
+  installationName: '', // shown in the alerts as [Ticker Feed Builder · name]; empty = the computer name
+  closeHintShown: false,
+  lastSeenVersion: '', // the version whose "What's new" the user has already seen
+  updateState: { skipVersion: '', remindUntil: 0, lastCheck: null }, // lastCheck: { at, ok, error }
+  window: null // { x, y, width, height, maximized } remembered between starts
 });
 
 export const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
@@ -79,7 +84,9 @@ export function sanitizeFilters(f) {
     exclude: words(r.exclude),
     scope: r.scope === 'title' ? 'title' : 'both',
     sort: r.sort === 'newest' ? 'newest' : 'feed',
-    dedupe: !!r.dedupe
+    dedupe: !!r.dedupe,
+    maxAgeHours: clamp(r.maxAgeHours, 0, 8760, 0), // 0 = off; stories older than this are left out
+    undated: r.undated === 'drop' ? 'drop' : 'keep' // what to do with a story that has no date when maxAgeHours is on
   };
 }
 
@@ -188,6 +195,19 @@ export function sanitizeSettings(s) {
   const seen = new Set();
   em.recipients = raw.map((x) => String(x || '').trim()).filter((x) => EMAIL_RE.test(x) && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase())).slice(0, 20);
   out.closeHintShown = !!out.closeHintShown;
+  out.installationName = String(out.installationName || '').trim().slice(0, 60);
+  out.lastSeenVersion = String(out.lastSeenVersion || '').slice(0, 40);
+  const us = isObj(out.updateState) ? out.updateState : {};
+  const lc = isObj(us.lastCheck) ? us.lastCheck : null;
+  out.updateState = {
+    skipVersion: String(us.skipVersion || '').slice(0, 40),
+    remindUntil: Number.isFinite(Number(us.remindUntil)) ? Math.max(0, Number(us.remindUntil)) : 0,
+    lastCheck: lc && Number.isFinite(Number(lc.at)) ? { at: Number(lc.at), ok: !!lc.ok, error: String(lc.error || '').slice(0, 200) } : null
+  };
+  const w = out.window;
+  out.window = isObj(w) && [w.width, w.height].every((n) => Number.isFinite(Number(n)) && Number(n) > 0)
+    ? { x: Number.isFinite(Number(w.x)) ? Math.round(Number(w.x)) : null, y: Number.isFinite(Number(w.y)) ? Math.round(Number(w.y)) : null, width: Math.round(Number(w.width)), height: Math.round(Number(w.height)), maximized: !!w.maximized }
+    : null;
   return out;
 }
 
@@ -196,31 +216,14 @@ export function newProfile(name) {
   return sanitizeProfile({ name, feeds: [], format: { ...DEFAULT_FORMAT } });
 }
 
-// Settings without secrets, for the JSON export / import
-export function exportable(settings) {
-  const s = structuredClone(settings);
-  s.notifications.telegram.botToken = '';
-  s.notifications.email.pass = '';
-  return s;
-}
-
 export function createStore({ file, seal = (v) => v, open = (v) => v, now = Date.now } = {}) {
   let data = load();
   let timer = null;
 
-  function mapToken(settings, fn) {
-    const s = structuredClone(settings);
-    const t = s.notifications?.telegram;
-    if (t && typeof t.botToken === 'string' && t.botToken) t.botToken = fn(t.botToken);
-    const e = s.notifications?.email;
-    if (e && typeof e.pass === 'string' && e.pass) e.pass = fn(e.pass);
-    return s;
-  }
-
   function load() {
     try {
       const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-      return sanitizeSettings(mapToken(raw.settings || {}, open));
+      return sanitizeSettings(mapSecrets(raw.settings || {}, open));
     } catch (err) {
       if (err.code !== 'ENOENT') {
         // unreadable or corrupt: keep the file for inspection instead of silently overwriting it
@@ -239,7 +242,7 @@ export function createStore({ file, seal = (v) => v, open = (v) => v, now = Date
     timer = null;
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const tmp = `${file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify({ version: 1, settings: mapToken(data, seal) }, null, 1), { mode: 0o600 });
+    fs.writeFileSync(tmp, JSON.stringify({ version: 1, settings: mapSecrets(data, seal) }, null, 1), { mode: 0o600 });
     fs.renameSync(tmp, file);
   }
 

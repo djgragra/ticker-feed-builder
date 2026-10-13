@@ -2,17 +2,26 @@
 // Channels: desktop notification, Telegram (Bot API) and email (SMTP). Nothing is hard-coded: the token, the chat
 // IDs, the server and the password come from the user's settings. This is the model for the alerts of every
 // OnAir Garage app (rules in garage-hub apps/STANDARD.md, "Alerts").
+import os from 'node:os';
 import { msg } from './messages.js';
 import { EMAIL_RE } from './settings.js';
 
-const PREFIX = '[Ticker Feed Builder]';
+export const APP_NAME = 'Ticker Feed Builder';
+const PREFIX = `[${APP_NAME}]`;
+const HAS_PREFIX = /^\[Ticker Feed Builder( · [^\]\n]*)?\]/;
+// Which installation speaks: the name the user gave, else the computer name. With several PCs in the studio the alert says which.
+export const installationName = (settings) => String(settings?.installationName || os.hostname() || '').trim();
+export const alertPrefix = (settings) => {
+  const name = installationName(settings);
+  return name ? `[${APP_NAME} · ${name}]` : PREFIX;
+};
 const clip = (s) => (s.length > 4000 ? s.slice(0, 3997) + '…' : s);
 
-export async function sendTelegram(cfg, text, lang = 'en', fetchFn = globalThis.fetch) {
+export async function sendTelegram(cfg, text, lang = 'en', fetchFn = globalThis.fetch, prefix = PREFIX) {
   if (!cfg?.enabled) return;
   const recipients = (cfg.recipients || []).filter((r) => String(r?.chatId || '').trim());
   if (!cfg.botToken || !recipients.length) throw new Error(msg(lang, 'tgIncomplete'));
-  const body = clip(text.startsWith(PREFIX) ? text : `${PREFIX} ${text}`); // the bot may be shared: say who writes
+  const body = clip(HAS_PREFIX.test(text) ? text : `${prefix} ${text}`); // the bot may be shared: say who writes
   const failures = [];
   for (const r of recipients) {
     try {
@@ -84,9 +93,11 @@ export function createAlerter({ getSettings, notifyDesktop = () => {}, log = () 
   function send(text, { desktop = true, subject: given } = {}) {
     const s = getSettings();
     if (desktop && s.notifications.desktop) notifyDesktop(text);
-    const subject = given || `${PREFIX} ${text.split(/[.:]/)[0].slice(0, 90)}`;
-    if (s.notifications.telegram?.enabled) withRetry('Telegram', () => tg(getSettings().notifications.telegram, text, getSettings().language));
-    if (s.notifications.email?.enabled) withRetry('email', () => mail(getSettings().notifications.email, subject, text, getSettings().language));
+    const prefix = alertPrefix(s);
+    const full = HAS_PREFIX.test(text) ? text : `${prefix} ${text}`; // every alert starts with [App · Installation]
+    const subject = given ? (HAS_PREFIX.test(given) ? given.replace(HAS_PREFIX, prefix) : `${prefix} ${given}`) : `${prefix} ${text.split(/[.:]/)[0].slice(0, 90)}`;
+    if (s.notifications.telegram?.enabled) withRetry('Telegram', () => tg(getSettings().notifications.telegram, full, getSettings().language));
+    if (s.notifications.email?.enabled) withRetry('email', () => mail(getSettings().notifications.email, subject, full, getSettings().language));
   }
 
   function check(key, ok, { downText, upText }) {

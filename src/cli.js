@@ -32,7 +32,7 @@ function parseArgs(argv) {
 
 const HELP = `Ticker Feed Builder, headless mode
 
-  --settings <file>   settings exported from the app ("Export settings") or the app's own settings.json (default: settings.json)
+  --settings <file>   a backup exported from the app (Settings → Backup) or the app's own settings.json (default: settings.json)
   --data <dir>        where logs and the remembered state go (default: ./tfb-data)
   --once              run every profile once and exit (0 = all feeds fine, 1 = some problem, 2 = settings unusable)
   --no-state          do not remember anything between runs
@@ -41,10 +41,11 @@ const HELP = `Ticker Feed Builder, headless mode
 Secrets (environment): TFB_TELEGRAM_TOKEN, TFB_SMTP_PASS. The settings file is checked again every 30 seconds:
 export new settings over it and they are picked up without a restart.`;
 
-// Reads the file the app exports ({ app, settings }) or the app's own store ({ version, settings }); sealed secrets are dropped.
+// Reads the backup file of the app ({ app, settings, profiles }), the older settings export ({ app, settings }) or the app's own store ({ version, settings }); sealed secrets are dropped.
 export function loadSettingsFile(file, env = process.env) {
   const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const s = sanitizeSettings(raw.settings ?? raw);
+  const base = raw.settings ?? raw;
+  const s = sanitizeSettings(Array.isArray(raw.profiles) ? { ...base, profiles: raw.profiles } : base); // backup files keep the profiles next to the settings
   const sealed = (v) => typeof v === 'string' && v.startsWith('enc:v1:');
   if (sealed(s.notifications.telegram.botToken)) s.notifications.telegram.botToken = '';
   if (sealed(s.notifications.email.pass)) s.notifications.email.pass = '';

@@ -143,7 +143,7 @@ try {
   await ev(`document.querySelectorAll('.tab')[0].click()`);
   await sleep(200);
   // feed options: exclude a word, check it is saved and used by the preview
-  await ev(`document.querySelectorAll('td.st')[0].parentElement.querySelectorAll('.btn.small')[0].click()`);
+  await ev(`document.querySelectorAll('td.st')[0].parentElement.querySelectorAll('.row-actions .btn.small')[0].click()`);
   await sleep(300);
   await shot('04b-feed-options');
   await ev(`(() => { const ta = document.querySelectorAll('#feedBody textarea')[1]; ta.value = 'seconda'; ta.dispatchEvent(new Event('change')); })()`);
@@ -157,13 +157,24 @@ try {
   assert.equal(await ev(`api.settings.get().then(s => s.profiles[0].feeds.length)`), 2);
   assert.equal(await ev(`api.settings.get().then(s => s.profiles[0].feeds[1].type)`), 'merge');
   await shot('04c-merged-feed');
-  await ev(`document.querySelectorAll('td.st')[0].parentElement.querySelectorAll('.btn.small')[1].click()`);
+  await ev(`document.querySelectorAll('td.st')[0].parentElement.querySelectorAll('.row-actions .btn.small')[1].click()`);
   await sleep(1500);
   assert.match(await ev(`document.querySelector('#testBody').textContent`), /1 of 2 stories after the filters \(1 left out\)/);
   await shot('05-test');
   await ev(`document.querySelector('#dlgTest').close(); document.querySelector('#btnSettings').click()`);
   await sleep(300);
+  // Settings has tabs, in the order of the OnAir Garage standard: General, (own tab), Alerts, Updates, Backup, Help & About
+  assert.deepEqual(await ev(`[...document.querySelectorAll('#settingsBody .tab')].map((b) => b.textContent)`), ['General', 'Headless mode', 'Alerts', 'Updates', 'Backup', 'Help & About']);
+  await shot('06a-settings-general');
+  assert.ok(await ev(`!!document.querySelector('#settingsBody input[maxlength="60"]')`), 'installation name field');
   // notifications as in the other apps: Telegram recipient rows, comma-separated email addresses
+  await ev(`document.querySelectorAll('#settingsBody .tab')[2].click()`);
+  await sleep(200);
+  // the password fields have a show / hide button
+  assert.equal(await ev(`document.querySelectorAll('#settingsBody input[type=password]').length`), 2);
+  await ev(`document.querySelector('#settingsBody .reveal-btn').click()`);
+  assert.equal(await ev(`document.querySelectorAll('#settingsBody input[type=password]').length`), 1);
+  await ev(`document.querySelector('#settingsBody .reveal-btn').click()`);
   await ev(`document.querySelector('#tAdd').click()`);
   await ev(`(() => { const [c, n] = document.querySelectorAll('#tRecipients .rec')[0].querySelectorAll('input'); c.value = '123456'; c.dispatchEvent(new Event('change')); n.value = 'Engineer'; n.dispatchEvent(new Event('change')); })()`);
   await ev(`(() => { const m = document.querySelector('#mTo'); m.value = 'a@x.org, b@y.it, bad'; m.dispatchEvent(new Event('change')); })()`);
@@ -175,6 +186,29 @@ try {
   await ev(`document.querySelector('#settingsBody').scrollTop = 99999`);
   await sleep(200);
   await shot('06b-settings-email');
+  // Updates: the same widget as the banner, last check, check now
+  await ev(`document.querySelectorAll('#settingsBody .tab')[3].click()`);
+  await sleep(300);
+  assert.match(await ev(`document.querySelector('#settingsBody').textContent`), /Check now/);
+  assert.match(await ev(`document.querySelector('#updateLast').textContent`), /Last check|No check yet/);
+  await shot('06c-settings-updates');
+  // Backup: the red warning appears only with the box ticked; an export writes no secret when the box is off
+  await ev(`document.querySelectorAll('#settingsBody .tab')[4].click()`);
+  await sleep(200);
+  assert.equal(await ev(`document.querySelector('.alert-line[role=alert]').hidden`), true);
+  await ev(`document.querySelector('#bkSecrets').click()`);
+  assert.equal(await ev(`document.querySelector('.alert-line[role=alert]').hidden`), false);
+  await shot('06d-settings-backup');
+  await ev(`document.querySelector('#bkSecrets').click()`);
+  // Help & About: version, support info without any path of the user
+  await ev(`document.querySelectorAll('#settingsBody .tab')[5].click()`);
+  await sleep(200);
+  assert.match(await ev(`document.querySelector('#settingsBody').textContent`), /Ticker Feed Builder \d+\.\d+\.\d+/);
+  const info = await ev(`api.supportInfo()`);
+  assert.match(info, /^Ticker Feed Builder \d+/);
+  assert.ok(!info.includes(os.homedir()), 'the home folder is written as ~');
+  assert.ok(!info.includes(out), 'no folder chosen by the user');
+  await shot('06e-settings-about');
   await ev(`document.querySelector('#dlgSettings').close(); document.querySelector('#btnHelp').click()`);
   await sleep(300);
   await shot('07-help');

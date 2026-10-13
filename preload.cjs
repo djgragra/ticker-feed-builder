@@ -11,10 +11,14 @@ contextBridge.exposeInMainWorld('api', {
   info: () => ipcRenderer.invoke('app:info'),
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
-    update: (patch) => ipcRenderer.invoke('settings:update', patch),
-    export: () => ipcRenderer.invoke('settings:export'),
-    import: () => ipcRenderer.invoke('settings:import')
+    update: (patch) => ipcRenderer.invoke('settings:update', patch)
   },
+  backup: {
+    export: (includeSecrets) => ipcRenderer.invoke('backup:export', !!includeSecrets),
+    import: (mode) => ipcRenderer.invoke('backup:import', mode)
+  },
+  supportInfo: () => ipcRenderer.invoke('app:support-info'),
+  whatsNew: { get: () => ipcRenderer.invoke('whatsnew:get'), seen: () => ipcRenderer.invoke('whatsnew:seen') },
   profiles: {
     save: (profile) => ipcRenderer.invoke('profile:save', profile),
     create: (name) => ipcRenderer.invoke('profile:create', name),
@@ -38,7 +42,11 @@ contextBridge.exposeInMainWorld('api', {
   update: {
     check: () => ipcRenderer.invoke('update:check'),
     download: () => ipcRenderer.invoke('update:download'),
-    reveal: (file) => ipcRenderer.invoke('update:reveal', file),
+    cancel: () => ipcRenderer.invoke('update:cancel'),
+    remind: () => ipcRenderer.invoke('update:remind'),
+    skip: () => ipcRenderer.invoke('update:skip'),
+    install: () => ipcRenderer.invoke('update:install'),
+    reveal: () => ipcRenderer.invoke('update:reveal'),
     onProgress: on('update:progress')
   },
   onStatus: on('status:update'),
