@@ -1,5 +1,13 @@
 # Changelog
 
+## 26.10.11 — 2026-10-17
+
+- **Alert emails no longer go to the sender too**: the message used to be addressed to the sender (the "From" address, or the SMTP user when "From" is empty) with the recipients in Bcc, so that mailbox received a copy of every alert even when it was not in the recipients list. The visible "To" is now empty (undisclosed recipients) and the SMTP envelope holds the recipients only. If the sender is also a recipient it gets the message once.
+- **Guided update, shared module version 2**: an installer download that is cancelled, cut off, stalled or whose last step fails no longer leaves a `.part` file in the Downloads folder (the file is closed before it is deleted, which Windows requires); `.part` files left by an earlier run are removed when the app starts and before a new download.
+- **Tip jar box** in Settings → Help & About: a small box with the jar and one line, with a link that opens the tip page of onairgarage.com in your language. No pop-ups, no reminders, nothing in the main window.
+- Dependencies: Electron 44.9.0 and Nodemailer 10.1.2 (minor and patch updates).
+- Tests: 71 (new ones for the email envelope, the download cleanup and the tip jar box).
+
 ## 26.10.10 — 2026-10-13
 
 - **Guided update, the same in every OnAir Garage app**: when a new version is out, a banner offers **Download and install**, **Remind me later** (24 hours) and **Skip this version**; a progress bar with a Cancel button; the installer is checked against the published SHA-256 sums. **Close and install** is refused while a profile is running (with a *Try again*), saves a **safety copy** of the settings first (the last 3 are kept) and, on Windows, closes the app, starts the installer and opens the app again at the end; on macOS it opens the disk image, on Linux it shows the AppImage. After the update a **What's new** window shows once and a notice says "Updated to X". Settings → Updates shows the same states, the last check and **Check now**. Nothing is installed without a click.

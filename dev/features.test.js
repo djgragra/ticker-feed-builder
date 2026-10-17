@@ -367,6 +367,26 @@ test('texts: English, Italian and Spanish have exactly the same keys', async () 
   }
 });
 
+test('tip jar box (26.10.11): same three texts in every language, the link goes to the site support page in the app language only', async () => {
+  const src = await fs.readFile(new URL('../renderer/i18n.js', import.meta.url), 'utf8');
+  const T = new Function(`${src}; return TEXTS;`)();
+  assert.equal(T.en['tip.text'], 'Useful to you? A coffee for the mechanics is always welcome.');
+  assert.equal(T.it['tip.text'], 'Ti è utile? Un caffè per i meccanici è sempre ben accetto.');
+  assert.equal(T.es['tip.text'], '¿Te resulta útil? Un café para los mecánicos siempre es bienvenido.');
+  assert.deepEqual(['en', 'it', 'es'].map((l) => T[l]['tip.btn']), ['Tip jar', 'Salvadanaio', 'Hucha']);
+  assert.deepEqual(['en', 'it', 'es'].map((l) => T[l]['tip.url']), ['https://onairgarage.com/support/', 'https://onairgarage.com/it/support/', 'https://onairgarage.com/es/support/']);
+  // the bridge only opens the sites listed in main.js: the three support pages pass, look-alikes do not
+  const main = await fs.readFile(new URL('../main.js', import.meta.url), 'utf8');
+  const ok = new RegExp(main.match(/const EXTERNAL_OK = \/(.+)\/;/)[1]);
+  for (const l of ['en', 'it', 'es']) assert.ok(ok.test(T[l]['tip.url']));
+  for (const bad of ['https://onairgarage.com.evil.test/support/', 'http://onairgarage.com/support/', 'https://buy.stripe.com/x']) assert.ok(!ok.test(bad), bad);
+  // the box has no pop-up, counter or other entry point: one box, in Help & About only
+  const app = await fs.readFile(new URL('../renderer/app.js', import.meta.url), 'utf8');
+  assert.equal((app.match(/tipBox\(\)/g) || []).length, 2); // the definition and the single call in aboutSection
+  const png = await fs.readFile(new URL('../renderer/img/tip-jar.png', import.meta.url));
+  assert.equal(png.subarray(1, 4).toString(), 'PNG');
+});
+
 test('icons: the SVG sources exist and every icon file is a real image of the right size', async () => {
   const dir = new URL('../assets/', import.meta.url);
   for (const f of ['logo.svg', 'tray.svg']) assert.match(await fs.readFile(new URL(f, dir), 'utf8'), /^<svg /);
