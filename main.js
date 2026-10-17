@@ -12,7 +12,7 @@ import { createStore, newProfile, sanitizeProfile } from './src/settings.js';
 import { buildExport, prepareImport, backupFileName } from './src/backup.js';
 import { msg } from './src/messages.js';
 import { sanitizeFormat } from './src/format.js';
-import { checkForUpdate, downloadInstaller, bannerState, remindLaterState, skipVersionState, makeSafetyCopy, installPlan, whatsNew, startupKind } from './src/updater.js';
+import { checkForUpdate, downloadInstaller, sweepPartials, bannerState, remindLaterState, skipVersionState, makeSafetyCopy, installPlan, whatsNew, startupKind } from './src/updater.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const EXTERNAL_OK = /^https:\/\/(onairgarage\.com|github\.com\/djgragra)(\/|$)/;
@@ -233,6 +233,8 @@ function applySystemSettings() {
 
 app.whenReady().then(() => {
   init();
+  const stale = sweepPartials(app.getPath('downloads'));
+  if (stale.length) logger.log('info', `removed ${stale.length} unfinished installer download(s) left by an earlier run`);
   buildMenu();
   applyTheme();
   const g = settings().general;
@@ -479,6 +481,7 @@ ipcMain.handle('update:download', async () => {
   if (downloadAbort) return { ok: false, error: 'busy' };
   downloadAbort = new AbortController();
   try {
+    sweepPartials(app.getPath('downloads')); // a .part left by a download that was cut off earlier goes first
     downloadedFile = await downloadInstaller({
       info: lastUpdateInfo,
       dir: app.getPath('downloads'),

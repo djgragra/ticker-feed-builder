@@ -359,3 +359,12 @@ table.feeds .reveal input { width: 0; flex: 1 1 0; }
 #whatsNewBody ul { margin: 8px 0 8px 18px; }
 .reveal-btn { padding: 5px 6px; }
 table.feeds td.url { min-width: 160px; }
+
+/* Tip jar box in Help & About: small, but it is seen. Cherry pill as on the site. */
+.tip-box { display: flex; align-items: center; gap: 14px; margin-top: 18px; padding: 10px 14px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; max-width: 520px; }
+.tip-jar { flex: none; width: 80px; height: auto; }
+.tip-body { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.tip-body p { margin: 0; font-size: 13px; color: var(--muted); }
+.tip-btn { display: inline-block; padding: 5px 14px; border: 2px solid #fbf4e4; border-radius: 99px; background: #c8232c; color: #fbf4e4; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; text-decoration: none; }
+.tip-btn:hover { background: #de2d37; }
+.tip-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

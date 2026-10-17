@@ -295,7 +295,7 @@ test('sendEmail: one message, all recipients in Bcc, TLS required with a passwor
   await sendEmail(cfg, 'subj', 'body', 'en', factory);
   assert.equal(sent.length, 1);
   assert.deepEqual(sent[0].bcc, ['a@x.org', 'b@x.org']);
-  assert.equal(sent[0].to, 'alerts@example.com');
+  assert.equal(sent[0].to, 'undisclosed-recipients:;'); // the sender is not put in "To": it would get a copy of every alert
   assert.equal(opts.requireTLS, true);
   assert.equal(opts.secure, false);
   await assert.rejects(sendEmail({ ...cfg, recipients: ['a@x.org', 'bad@x.org'] }, 's', 'b', 'en', factory), /bad@x.org/);
@@ -305,6 +305,30 @@ test('sendEmail: one message, all recipients in Bcc, TLS required with a passwor
   // the password must not leak into an error message
   const boom = () => ({ sendMail: async () => { throw new Error('auth failed for secret'); }, close() {} });
   await assert.rejects(sendEmail(cfg, 's', 'b', 'en', boom), (e) => !e.message.includes('secret') && e.message.includes('***'));
+});
+
+test('sendEmail: the SMTP envelope holds the recipients only; the sender gets no copy unless it is a recipient (26.10.11)', async () => {
+  const { default: nodemailer } = await import('nodemailer');
+  const real = nodemailer.createTransport({ streamTransport: true, buffer: true });
+  const run = async (recipients) => {
+    const infos = [];
+    const factory = () => ({ sendMail: async (m) => { const i = await real.sendMail(m); infos.push(i); return i; }, close() {} });
+    const cfg = { enabled: true, host: 'smtp.example.com', user: 'programmazione@example.fm', pass: 'secret', from: '', recipients };
+    await sendEmail(cfg, 'subj', 'body', 'en', factory);
+    return infos[0];
+  };
+  // the sender (here also the user name, as when "From" is empty) is not among the recipients
+  const one = await run(['gm@example.fm']);
+  assert.deepEqual(one.envelope.to, ['gm@example.fm']);
+  assert.equal(one.envelope.from, 'programmazione@example.fm');
+  assert.ok(!/^To:.*programmazione@/mi.test(one.message.toString()));
+  // two recipients: both in the envelope, none of them in the visible headers
+  const two = await run(['a@example.fm', 'b@example.it']);
+  assert.deepEqual(two.envelope.to, ['a@example.fm', 'b@example.it']);
+  assert.match(two.message.toString(), /^To: "?undisclosed-recipients"?:;/mi);
+  // the sender is also a recipient: it receives the message once
+  const self = await run(['programmazione@example.fm', 'gm@example.fm']);
+  assert.deepEqual(self.envelope.to, ['programmazione@example.fm', 'gm@example.fm']);
 });
 
 test('alerter: email and Telegram both get the alert (several recipients live in their settings)', async () => {

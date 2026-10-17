@@ -889,7 +889,17 @@ function aboutSection(msgBox) {
         try { await navigator.clipboard.writeText(text); msgBox.textContent = t('ab.copied'); } catch { msgBox.textContent = text; }
       } }),
       h('button', { class: 'btn', text: t('ab.logs'), onclick: () => api.logs.openFolder() }),
-      h('button', { class: 'btn', text: t('s.checkNow'), onclick: () => checkUpdate(true) })));
+      h('button', { class: 'btn', text: t('s.checkNow'), onclick: () => checkUpdate(true) })),
+    tipBox());
+}
+
+// One quiet box at the end of Help & About (apps/COMMON-FEATURES.md, section 6): the jar, one line, one link.
+function tipBox() {
+  return h('aside', { class: 'tip-box' },
+    h('img', { class: 'tip-jar', src: 'img/tip-jar.png', alt: '', width: 80, height: 59 }),
+    h('div', { class: 'tip-body' },
+      h('p', { text: t('tip.text') }),
+      h('a', { class: 'tip-btn', href: '#', text: t('tip.btn'), onclick: (e) => { e.preventDefault(); api.openExternal(t('tip.url')); } })));
 }
 
 // ---- updates (guided update, apps/COMMON-FEATURES.md section 4) ----------------------------------------

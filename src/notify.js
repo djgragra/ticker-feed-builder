@@ -57,8 +57,9 @@ export async function sendEmail(cfg, subject, text, lang = 'en', transportFactor
     socketTimeout: 20_000
   });
   try {
-    // one message, all recipients in Bcc: they do not see each other's addresses
-    const info = await transporter.sendMail({ from: cfg.from || cfg.user, to: cfg.from || cfg.user, bcc: to, subject, text });
+    // one message, all recipients in Bcc: they do not see each other's addresses. The visible "To" is empty
+    // (undisclosed-recipients), so the sender does not get a copy of its own alerts unless it is a recipient.
+    const info = await transporter.sendMail({ from: cfg.from || cfg.user, to: 'undisclosed-recipients:;', bcc: to, subject, text });
     const rejected = info?.rejected || [];
     if (rejected.length) throw new Error(`${rejected.join(', ')}: rejected by the server`);
   } catch (err) {

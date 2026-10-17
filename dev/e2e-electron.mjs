@@ -208,7 +208,18 @@ try {
   assert.match(info, /^Ticker Feed Builder \d+/);
   assert.ok(!info.includes(os.homedir()), 'the home folder is written as ~');
   assert.ok(!info.includes(out), 'no folder chosen by the user');
+  // tip jar box: the jar image really loads (CSP allows it), one line, one link
+  assert.equal(await ev(`document.querySelectorAll('#settingsBody .tip-box').length`), 1);
+  assert.ok(await ev(`document.querySelector('.tip-jar').complete && document.querySelector('.tip-jar').naturalWidth > 0`), 'the jar image loads');
+  assert.equal(await ev(`document.querySelector('.tip-btn').textContent`), 'Tip jar');
+  await ev(`document.querySelector('.tip-box').scrollIntoView({ block: 'end' })`);
+  await sleep(100);
   await shot('06e-settings-about');
+  await ev(`(() => { const t = document.querySelector('#theme'); t.value = 'light'; t.dispatchEvent(new Event('change')); })()`);
+  await sleep(200);
+  await shot('06f-settings-about-light');
+  await ev(`(() => { const t = document.querySelector('#theme'); t.value = 'dark'; t.dispatchEvent(new Event('change')); })()`);
+  await sleep(200);
   await ev(`document.querySelector('#dlgSettings').close(); document.querySelector('#btnHelp').click()`);
   await sleep(300);
   await shot('07-help');
