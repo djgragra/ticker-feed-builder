@@ -5,7 +5,7 @@ Downloads RSS feeds on a schedule and turns each one into numbered text lines an
 - Tool page: https://onairgarage.com/tools/ticker-feed-builder/
 - Author: Graziano Melzi · OnAir Garage — hello@onairgarage.com
 - License: MIT (see `LICENSE`)
-- Systems: Windows (installer), macOS (dmg, Apple silicon and Intel), Linux (AppImage, x64). Built for all three; **only macOS has been run so far** (see Validation).
+- Systems: Windows (installer), macOS (dmg, Apple silicon and Intel), Linux (AppImage, x64). Built for all three; **Windows and macOS have been run by the author (declared 17 October 2026); Linux has only been run in the automated tests and the end-to-end run under a virtual screen** (see Validation).
 
 ![Dashboard of Ticker Feed Builder](docs/screenshots/01-dashboard.png)
 
@@ -89,7 +89,7 @@ Results as of October 2026.
 | Same run | number of images per feed | equal for all 8 feeds | same |
 | End-to-end on the real Electron app (macOS; Linux for the 26.10.10 interface) | create profile, run, files on disk, status in the UI, language switch, Settings tabs, show / hide password, backup box, Help & About, feed options, no console errors | pass | `node dev/e2e-electron.mjs [screenshotDir]` |
 
-**Not validated**: the guided update on a real Windows or Mac (starting the installer, the restart, the disk image) and the keystore sealing of feed credentials outside Linux (26.10.10); WebP/AVIF with real-world files from publishers (only synthetic images in the tests); the headless mode on Windows and as a service; playback in NeMedia Morpheus or any other ticker system; Windows (paths, drives, file locking by a player, installer); Linux; runs lasting days; Telegram and email delivery against real services (unit-tested with fakes only); Windows-1252 output beyond a unit test. This is not a certified tool.
+**Not validated**: WebP/AVIF with real-world files from publishers (only synthetic images in the tests); the headless mode on Windows and as a service; playback in NeMedia Morpheus or any other ticker system; Linux on a real desktop; runs lasting days; Telegram and email delivery against real services (unit-tested with fakes only); Windows-1252 output beyond a unit test. This is not a certified tool.
 
 ## Sources to re-check
 
