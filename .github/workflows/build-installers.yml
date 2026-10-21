@@ -97,8 +97,23 @@ jobs:
       - name: Build ${{ matrix.name }} installer
         run: ${{ matrix.command }}
         env:
-          # No signing certificates: builds are unsigned.
+          # No signing certificates. The macOS app still gets an ad-hoc signature (dev/sign-adhoc.cjs):
+          # without a valid one an Apple Silicon Mac says the app is "damaged".
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Check the signature of the apps inside the macOS disk images
+        if: matrix.name == 'macos'
+        run: |
+          set -e
+          for dmg in release/*.dmg; do
+            MNT=$(mktemp -d)
+            hdiutil attach "$dmg" -mountpoint "$MNT" -nobrowse -readonly -quiet
+            APP=$(ls -d "$MNT"/*.app | head -1)
+            echo "== $dmg"
+            codesign --verify --deep --strict --verbose=2 "$APP"
+            codesign -dv "$APP" 2>&1 | grep -E "Signature|Identifier" || true
+            hdiutil detach "$MNT" -quiet
+          done
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v7

@@ -1,5 +1,12 @@
 # Changelog
 
+## 26.10.12 — 2026-10-21
+
+- **Fix: macOS on Apple Silicon said the app was "damaged".** The Apple Silicon build had a signature that was no longer valid (macOS: "code has no resources but signature indicates they must be present"), and recent macOS versions refuse such an app instead of offering to open it. The app is now signed ad hoc during the build (no Apple account is needed) and the build checks the signature of the app inside each disk image. The first start still shows the usual "unidentified developer" notice: *System Settings → Privacy & Security → Open Anyway*. If you already downloaded an earlier version and it will not open, run once in Terminal: `xattr -cr "/Applications/Ticker Feed Builder.app" && codesign --force --deep -s - "/Applications/Ticker Feed Builder.app"`. Thanks to Rob, who reported it.
+- **Text changes, per feed** (feed Options): replace pieces of text (one rule per line, `search → replace with`, plain text, capital letters count, an empty replacement deletes), make the text ALL CAPITALS, all lowercase or only the first letter capital, add a text before and/or after the title (for example `ANSA – `), and give the feed its own title and description limits (0 = the profile's). They are applied just before the length limits, in this order: replacements, capital letters, text before / after the title, length limit (cut at the end of a word, with "…"). The test dialog shows the result; "Show the feed as it is" shows the stories before the changes. Everything is off until you fill it in; filters and duplicates still look at the original text. No patterns (regular expressions) on purpose.
+- **The tip jar picture is a button too**, like the pill under it (Settings → Help & About): same link, in the language of the app.
+- Tests: 82 (new: text changes, settings, files and preview, the ad-hoc signature hook, the tip jar picture), and the end-to-end run on the real app now covers the text changes.
+
 ## 26.10.11 — 2026-10-17
 
 - **Alert emails no longer go to the sender too**: the message used to be addressed to the sender (the "From" address, or the SMTP user when "From" is empty) with the recipients in Bcc, so that mailbox received a copy of every alert even when it was not in the recipients list. The visible "To" is now empty (undisclosed recipients) and the SMTP envelope holds the recipients only. If the sender is also a recipient it gets the message once.

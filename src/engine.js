@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { httpGet, isPrivateHost } from './http.js';
 import { parseFeed } from './feed.js';
 import { toJpeg, MAX_IMAGE_BYTES, isJpegBytes } from './image.js';
-import { truncate } from './text.js';
+import { lineFor } from './transform.js';
 import { applyTemplate, encodeLines, imageName } from './format.js';
 import { applyFilters, sortNewest, titleKey } from './filters.js';
 import { cleanTemp, removeOrphanImages, writeIfChanged } from './output.js';
@@ -201,8 +201,8 @@ export function createEngine({ log = () => {}, get = httpGet, convert = toJpeg, 
     const st = { withImage: 0, placeholders: 0, emptyTitles: 0, emptyDescs: 0, failed: 0 };
 
     const recs = await mapLimit(items, 4, async (it) => {
-      let title = fmt.maxTitleChars ? truncate(it.title, fmt.maxTitleChars) : it.title;
-      let desc = fmt.maxDescChars ? truncate(it.description, fmt.maxDescChars) : it.description;
+      let title = lineFor(it.title, feed.transform, 'title', fmt.maxTitleChars);
+      let desc = lineFor(it.description, feed.transform, 'desc', fmt.maxDescChars);
       if (!title) { title = fmt.emptyValue; st.emptyTitles++; }
       if (!desc) { desc = fmt.emptyValue; st.emptyDescs++; }
       let jpg = null;
@@ -290,7 +290,7 @@ export function createEngine({ log = () => {}, get = httpGet, convert = toJpeg, 
       // Skip work when nothing can have changed: same settings as the last run, all output files still there and no
       // image that failed last time (it deserves a new try). A manual "Run now" (force) always rebuilds.
       // With duplicates removed across the feeds of the profile the result of one feed depends on the others: no skipping then.
-      const sig = JSON.stringify([profile.outputDir, profile.placeholderPath, fmt, folder, feed.maxItems, feed.url, feed.filters, profile.dedupeAcrossFeeds, profile.verifyOutput]);
+      const sig = JSON.stringify([profile.outputDir, profile.placeholderPath, fmt, folder, feed.maxItems, feed.url, feed.filters, feed.transform, profile.dedupeAcrossFeeds, profile.verifyOutput]);
       const prev = feedState.get(key);
       const smart = !force && !profile.dedupeAcrossFeeds && prev && prev.sig === sig && prev.imageFailures === 0 && (await outputIntact(profile, feed, prev.items));
       const skipUnchanged = () => {
@@ -441,8 +441,9 @@ export function createEngine({ log = () => {}, get = httpGet, convert = toJpeg, 
             failed = true;
           }
         }
-        const title = fmt.maxTitleChars ? truncate(it.title, fmt.maxTitleChars) : it.title;
-        const desc = fmt.maxDescChars ? truncate(it.description, fmt.maxDescChars) : it.description;
+        const tr = raw ? null : feed.transform; // "as it is in the feed" shows the stories before the text changes
+        const title = lineFor(it.title, tr, 'title', fmt.maxTitleChars);
+        const desc = lineFor(it.description, tr, 'desc', fmt.maxDescChars);
         return {
           n: i + 1,
           imageFile: imageName({ imageStart: fmt.imageStart ?? 1, imagePad: fmt.imagePad ?? 5, imageExt: fmt.imageExt ?? 'JPG' }, i),
