@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { DEFAULT_FORMAT, safeName, sanitizeFormat } from './format.js';
 import { isTime, PLAN_MODES } from './schedule-rules.js';
 import { mapSecrets } from './secrets.js';
+import { sanitizeTransform } from './transform.js';
 
 export const MAX_PROFILES = 20;
 export const MAX_FEEDS = 100;
@@ -107,6 +108,7 @@ function sanitizeFeed(raw, ids, folders) {
     intervalMin: clamp(r.intervalMin, 0, 1440, 0), // 0 = the profile's interval
     staleHours: clamp(r.staleHours, 0, 720, 0), // 0 = the profile's value; alert when no new stories for that long
     filters: sanitizeFilters(r.filters),
+    transform: sanitizeTransform(r.transform), // changes to the text of the stories (replacements, case, prefix / suffix, own length limits)
     enabled: r.enabled !== false,
     insecureTls: !!r.insecureTls
   };

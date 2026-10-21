@@ -339,7 +339,7 @@ function feedsTab(p, change) {
         h('button', { class: 'btn small icon-btn danger', title: t('f.remove'), 'aria-label': t('f.remove'), onclick: () => { p.feeds = p.feeds.filter((x) => x.id !== f.id); for (const m of p.feeds) m.sources = (m.sources || []).filter((sid) => sid !== f.id); change(); renderMain(); } }, icon('x'))))
     );
   });
-  const addFeed = (type) => { p.feeds.push({ id: crypto.randomUUID(), type, folder: type === 'merge' ? 'Latest' : `Feed${p.feeds.length + 1}`, url: '', sources: type === 'merge' ? p.feeds.filter((x) => x.type === 'feed').map((x) => x.id) : [], maxItems: type === 'merge' ? 15 : 10, intervalMin: 0, staleHours: 0, filters: { include: [], exclude: [], scope: 'both', sort: 'feed', dedupe: false, maxAgeHours: 0, undated: 'keep' }, enabled: true, insecureTls: false }); change(); renderMain(); };
+  const addFeed = (type) => { p.feeds.push({ id: crypto.randomUUID(), type, folder: type === 'merge' ? 'Latest' : `Feed${p.feeds.length + 1}`, url: '', sources: type === 'merge' ? p.feeds.filter((x) => x.type === 'feed').map((x) => x.id) : [], maxItems: type === 'merge' ? 15 : 10, intervalMin: 0, staleHours: 0, filters: { include: [], exclude: [], scope: 'both', sort: 'feed', dedupe: false, maxAgeHours: 0, undated: 'keep' }, transform: { replace: [], case: 'none', prefix: '', suffix: '', maxTitleChars: 0, maxDescChars: 0 }, enabled: true, insecureTls: false }); change(); renderMain(); };
   return h('div', {},
     p.feeds.length
       ? h('table', { class: 'feeds' },
@@ -355,11 +355,16 @@ function feedsTab(p, change) {
 }
 
 // ---- feed options (filters, order, merge sources, alert) ----------------------------------------------
+// "from → to" lines of the text changes; same rules as parseRules / formatRules in src/transform.js (this page cannot import modules)
+const parseRules = (text) => String(text ?? '').split(/\r?\n/).map((line) => /^(.*?)\s*(?:→|->|=>)\s?(.*)$/.exec(line)).filter((m) => m && m[1]).map((m) => ({ from: m[1], to: m[2] }));
+const formatRules = (rules) => (rules || []).map((r) => `${r.from} → ${r.to}`).join('\n');
 const splitWords = (v) => v.split(/[\n,;]+/).map((x) => x.trim()).filter(Boolean);
 
 function openFeedDialog(p, f, change) {
   $('#feedTitle').textContent = `${t('fo.title')} — ${f.folder}`;
   const fl = f.filters;
+  f.transform ||= { replace: [], case: 'none', prefix: '', suffix: '', maxTitleChars: 0, maxDescChars: 0 };
+  const tr = f.transform;
   const merge = f.type === 'merge';
   const words = (key) => h('textarea', { rows: 3, spellcheck: false, value: fl[key].join('\n'), onchange: (e) => { fl[key] = splitWords(e.target.value); change(); } });
   const sel = (get, set, opts) => h('select', { onchange: (e) => { set(e.target.value); change(); } }, opts.map(([v, k]) => h('option', { value: v, selected: get() === v, text: t(k) })));
@@ -387,6 +392,17 @@ function openFeedDialog(p, f, change) {
       merge ? null : h('label', { text: t('fo.sort') }), merge ? null : sel(() => fl.sort, (v) => { fl.sort = v; }, [['feed', 'fo.sortFeed'], ['newest', 'fo.sortNewest']]),
       merge ? null : h('span', {}), merge ? null : h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: fl.dedupe, onchange: (e) => { fl.dedupe = e.target.checked; change(); } }), h('span', { text: t('fo.dedupe') })),
       h('label', { text: t('fo.maxAge') }), ageRow())));
+  const numField = (key) => h('input', { type: 'number', min: 0, max: 2000, value: tr[key] || '', placeholder: t('fo.trLimitProfile'), onchange: (e) => { tr[key] = Math.max(0, Math.round(Number(e.target.value) || 0)); change(); } });
+  const textField = (key) => h('input', { type: 'text', maxlength: 40, spellcheck: false, value: tr[key] || '', onchange: (e) => { tr[key] = e.target.value; change(); } });
+  rowsDom.push(h('div', { class: 'sec' }, h('h3', { text: t('fo.transform') }), h('p', { class: 'hint', text: t('fo.trHint') }),
+    h('div', { class: 'form' },
+      h('label', { text: t('fo.trReplace') }), h('textarea', { rows: 3, spellcheck: false, placeholder: '&amp; → &', value: formatRules(tr.replace), onchange: (e) => { tr.replace = parseRules(e.target.value); e.target.value = formatRules(tr.replace); change(); } }),
+      h('label', { text: t('fo.trCase') }), sel(() => tr.case, (v) => { tr.case = v; }, [['none', 'fo.trCaseNone'], ['upper', 'fo.trCaseUpper'], ['lower', 'fo.trCaseLower'], ['sentence', 'fo.trCaseSentence']]),
+      h('label', { text: t('fo.trPrefix') }), textField('prefix'),
+      h('label', { text: t('fo.trSuffix') }), textField('suffix'),
+      h('label', { text: t('fo.trMaxTitle') }), numField('maxTitleChars'),
+      h('label', { text: t('fo.trMaxDesc') }), numField('maxDescChars')),
+    h('p', { class: 'hint', text: t('fo.trOrder') })));
   rowsDom.push(h('div', { class: 'sec' }, h('h3', { text: t('o.checks') }),
     h('div', { class: 'check' }, h('span', { text: t('fo.stale') }), h('input', { type: 'number', min: 0, max: 720, value: f.staleHours || '', placeholder: String(p.staleHours), onchange: (e) => { f.staleHours = Number(e.target.value) || 0; change(); } }), h('span', { class: 'hint', text: t('fo.staleHint') }))));
   $('#feedBody').replaceChildren(...rowsDom);
@@ -895,11 +911,14 @@ function aboutSection(msgBox) {
 
 // One quiet box at the end of Help & About (apps/COMMON-FEATURES.md, section 6): the jar, one line, one link.
 function tipBox() {
+  const open = (e) => { e.preventDefault(); api.openExternal(t('tip.url')); };
   return h('aside', { class: 'tip-box' },
-    h('img', { class: 'tip-jar', src: 'img/tip-jar.png', alt: '', width: 80, height: 59 }),
+    // the jar does what the button does: same link, in the language of the app
+    h('a', { class: 'tip-jar-link', href: '#', title: t('tip.btn'), 'aria-label': t('tip.btn'), onclick: open },
+      h('img', { class: 'tip-jar', src: 'img/tip-jar.png', alt: '', width: 80, height: 59 })),
     h('div', { class: 'tip-body' },
       h('p', { text: t('tip.text') }),
-      h('a', { class: 'tip-btn', href: '#', text: t('tip.btn'), onclick: (e) => { e.preventDefault(); api.openExternal(t('tip.url')); } })));
+      h('a', { class: 'tip-btn', href: '#', text: t('tip.btn'), onclick: open })));
 }
 
 // ---- updates (guided update, apps/COMMON-FEATURES.md section 4) ----------------------------------------

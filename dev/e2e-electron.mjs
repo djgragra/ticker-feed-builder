@@ -149,6 +149,19 @@ try {
   await ev(`(() => { const ta = document.querySelectorAll('#feedBody textarea')[1]; ta.value = 'seconda'; ta.dispatchEvent(new Event('change')); })()`);
   await sleep(600);
   assert.deepEqual(await ev(`api.settings.get().then(s => s.profiles[0].feeds[0].filters.exclude)`), ['seconda']);
+  // text changes: a replacement, capital letters and a prefix; saved, and shown by the preview lines
+  await ev(`(() => { const ta = document.querySelectorAll('#feedBody textarea')[2]; ta.value = 'Prima -> Primissima'; ta.dispatchEvent(new Event('change')); })()`);
+  await ev(`(() => { const sel = [...document.querySelectorAll('#feedBody select')].find((x) => [...x.options].some((o) => o.value === 'sentence')); sel.value = 'upper'; sel.dispatchEvent(new Event('change')); })()`);
+  await ev(`(() => { const inp = document.querySelectorAll('#feedBody input[type=text]')[0]; inp.value = 'ANSA – '; inp.dispatchEvent(new Event('change')); })()`);
+  await sleep(600);
+  const tr = await ev(`api.settings.get().then(s => s.profiles[0].feeds[0].transform)`);
+  assert.deepEqual(tr.replace, [{ from: 'Prima', to: 'Primissima' }]);
+  assert.equal(tr.case, 'upper');
+  assert.equal(tr.prefix, 'ANSA – ');
+  await shot('04b2-text-changes');
+  const pv = await ev(`api.settings.get().then((s) => api.feed.test(s.profiles[0].feeds[0], s.profiles[0].id, false))`);
+  assert.equal(pv.ok, true);
+  assert.equal(pv.items[0].titleLine, 'ANSA – PRIMISSIMA NOTIZIA');
   await ev(`document.querySelector('#dlgFeed').close()`);
   await sleep(300);
   // add a merged feed

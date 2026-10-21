@@ -1,6 +1,6 @@
 {
   "name": "ticker-feed-builder",
-  "version": "26.10.11",
+  "version": "26.10.12",
   "description": "Turns RSS feeds into numbered text lines and JPG images for TV tickers and playout graphics, on a schedule",
   "main": "main.js",
   "type": "module",
@@ -28,6 +28,7 @@
     "appId": "com.onairgarage.tickerfeedbuilder",
     "productName": "Ticker Feed Builder",
     "publish": null,
+    "afterPack": "dev/sign-adhoc.cjs",
     "files": [
       "main.js",
       "preload.cjs",
