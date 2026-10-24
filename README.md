@@ -6,6 +6,7 @@ Downloads RSS feeds on a schedule and turns each one into numbered text lines an
 - Author: Graziano Melzi · OnAir Garage — hello@onairgarage.com
 - License: MIT (see `LICENSE`)
 - Systems: Windows (installer), macOS (dmg, Apple silicon and Intel), Linux (AppImage, x64). Built for all three; **Windows and macOS have been run by the author (declared 17 October 2026); Linux has only been run in the automated tests and the end-to-end run under a virtual screen** (see Validation).
+- Manual: attached to every release as three PDFs, English (`Ticker-Feed-Builder-Manual-EN-<version>.pdf`), Italian (`-IT-`) and Spanish (`-ES-`); the source is in `docs/manual/` (`python3 docs/manual/build.py <version> <folder>` makes the PDFs; it needs Chrome or Chromium).
 
 ![Dashboard of Ticker Feed Builder](docs/screenshots/01-dashboard.png)
 
