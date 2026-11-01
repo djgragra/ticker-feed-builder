@@ -105,6 +105,8 @@ Results as of October 2026.
 | ANSA RSS page (`ansa.it/sito/static/ansa_rss.html`) | read 2026-10-08, no version or date on the page |
 | Adnkronos RSS page (`adnkronos.com/rss`) | read 2026-10-08, no version on the page |
 
+<a href="https://ko-fi.com/F8V328ADFH"><img height="36" src="https://storage.ko-fi.com/cdn/kofi6.png?v=6" alt="Buy Me a Coffee at ko-fi.com"></a>
+
 ## Run locally
 
 ```bash
@@ -139,3 +141,9 @@ Versions are `YY.M.N` (e.g. `26.10.1`), tags `vYY.M.N`.
 ## Credits
 
 [fast-xml-parser](https://github.com/NaturalIntelligence/fast-xml-parser) (MIT), [jimp](https://github.com/jimp-dev/jimp) (MIT), [iconv-lite](https://github.com/ashtuchkin/iconv-lite) (MIT), [nodemailer](https://nodemailer.com/) (MIT-0), [@jsquash/webp and @jsquash/avif](https://github.com/jamsinclair/jSquash) (Apache-2.0), [Electron](https://www.electronjs.org/) (MIT). No fonts are bundled.
+
+## Support
+
+This tool is free and will stay free, with source code. If it saved your day, you can leave a tip on Ko-fi: a thank-you, nothing more.
+
+<a href="https://ko-fi.com/F8V328ADFH"><img height="36" src="https://storage.ko-fi.com/cdn/kofi6.png?v=6" alt="Buy Me a Coffee at ko-fi.com"></a>
