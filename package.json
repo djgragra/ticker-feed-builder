@@ -77,7 +77,7 @@
   "dependencies": {
     "@jsquash/avif": "^2.1.1",
     "@jsquash/webp": "^1.5.0",
-    "fast-xml-parser": "^5.11.2",
+    "fast-xml-parser": "^5.12.0",
     "iconv-lite": "^0.7.3",
     "jimp": "^1.6.1",
     "nodemailer": "^10.1.2"
